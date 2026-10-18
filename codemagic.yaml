@@ -1,0 +1,49 @@
+workflows:
+  ios-unsigned:
+    name: Chat AI TPiOS - Build IPA
+    max_build_duration: 60
+    environment:
+      xcode: 16.4
+      cocoapods: default
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate app icon
+        script: |
+          ICON_DIR="ChatAI/Assets.xcassets/AppIcon.appiconset"
+          mkdir -p "$ICON_DIR"
+          sips -s format png --resampleHeightWidth 1024 1024 IMG_0290.png --out "$ICON_DIR/icon-1024.png"
+          sips -z 40 40   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-20@2x.png"
+          sips -z 60 60   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-20@3x.png"
+          sips -z 58 58   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-29@2x.png"
+          sips -z 87 87   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-29@3x.png"
+          sips -z 80 80   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@2x.png"
+          sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@3x.png"
+          sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@2x.png"
+          sips -z 180 180 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@3x.png"
+
+      - name: Generate Xcode project
+        script: xcodegen generate
+
+      - name: Build app (unsigned)
+        script: |
+          xcodebuild \
+            -project ChatAI.xcodeproj \
+            -scheme ChatAI \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package IPA
+        script: |
+          APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r chat-ai-tpios.ipa Payload
+
+    artifacts:
+      - chat-ai-tpios.ipa
