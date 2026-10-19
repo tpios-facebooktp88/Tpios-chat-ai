@@ -92,13 +92,23 @@ final class VoiceManager: NSObject, ObservableObject {
 
     // MARK: - Ghi âm + Whisper STT
 
-    func startListening(
+        func startListening(
         groqAPIKey: String,
         onPartialResult: @escaping (String) -> Void,
         onFinish: @escaping (String) -> Void
     ) {
         guard !isListening else {
             stopListeningAndTranscribe(groqAPIKey: groqAPIKey, onFinish: onFinish)
+            return
+        }
+
+        voiceErrorMessage = nil
+
+        // Set category TRƯỚC khi xin quyền — tránh crash trên iOS 16
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.record, mode: .default, options: [])
+        } catch {
+            voiceErrorMessage = "Lỗi audio: \(error.localizedDescription)"
             return
         }
 
@@ -125,15 +135,13 @@ final class VoiceManager: NSObject, ObservableObject {
     ) {
         voiceErrorMessage = nil
 
-                do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .default, options: [])
-            try session.setActive(true)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            voiceErrorMessage = "Lỗi audio session: \(error.localizedDescription)"
+            voiceErrorMessage = "Lỗi kích hoạt micro: \(error.localizedDescription)"
             return
         }
-        
+
         let tempDir = FileManager.default.temporaryDirectory
         let fileURL = tempDir.appendingPathComponent("voice_\(UUID().uuidString).m4a")
         recordingURL = fileURL
@@ -151,37 +159,8 @@ final class VoiceManager: NSObject, ObservableObject {
             isListening = true
             onPartialResult("🎙 Đang nghe... Bấm mic lần nữa để dừng")
         } catch {
-            voiceErrorMessage = "Không khởi động được ghi âm: \(error.localizedDescription)"
-        }
-    }
-
-    func stopListeningAndTranscribe(groqAPIKey: String, onFinish: @escaping (String) -> Void) {
-        guard isListening, let url = recordingURL else { return }
-
-        audioRecorder?.stop()
-        audioRecorder = nil
-        isListening = false
-
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-
-        guard !groqAPIKey.isEmpty else {
-            voiceErrorMessage = "Cần nhập Groq API key trong Cài đặt để dùng tính năng giọng nói."
-            return
-        }
-
-        Task {
-            do {
-                let text = try await GroqWhisper.transcribe(fileURL: url, apiKey: groqAPIKey)
-                try? FileManager.default.removeItem(at: url)
-                if text.isEmpty {
-                    voiceErrorMessage = "Không nhận diện được giọng nói. Thử lại."
-                } else {
-                    onFinish(text)
-                }
-            } catch {
-                voiceErrorMessage = "Lỗi nhận diện: \(error.localizedDescription)"
-                try? FileManager.default.removeItem(at: url)
-            }
+            voiceErrorMessage = "Lỗi ghi âm: \(error.localizedDescription)"
+            try? AVAudioSession.sharedInstance().setActive(false)
         }
     }
 
