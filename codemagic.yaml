@@ -38,13 +38,14 @@ workflows:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-          - name: Package IPA
+      - name: Package IPA
         script: |
           APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -r chat-ai-tpios-$BUILD_NUMBER.ipa Payload
+          zip -r "chat-ai-tpios.ipa" Payload
+          echo "Build number: $BUILD_NUMBER" > build-info.txt
 
     artifacts:
-      - chat-ai-tpios-*.ipa
-
+      - chat-ai-tpios.ipa
+      - build-info.txt
