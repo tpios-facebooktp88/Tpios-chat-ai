@@ -25,7 +25,6 @@ workflows:
 
       - name: Generate Xcode project
         script: xcodegen generate
-
       - name: Build app (unsigned)
         script: |
           xcodebuild \
@@ -36,7 +35,8 @@ workflows:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            -showBuildTimingSummary \
+            build 2>&1 | tee build_output.txt || (cat build_output.txt && exit 1)
 
       - name: Package IPA
         script: |
