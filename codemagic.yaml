@@ -6,6 +6,15 @@ workflows:
       xcode: 16.4
       cocoapods: default
     scripts:
+      - name: Check files
+        script: |
+          echo "=== Root files ==="
+          ls -la
+          echo "=== ChatAI folder ==="
+          ls -la ChatAI/
+          echo "=== project.yml ==="
+          cat project.yml
+
       - name: Install XcodeGen
         script: brew install xcodegen
 
@@ -25,6 +34,7 @@ workflows:
 
       - name: Generate Xcode project
         script: xcodegen generate
+
       - name: Build app (unsigned)
         script: |
           xcodebuild \
@@ -35,17 +45,26 @@ workflows:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            -showBuildTimingSummary \
-            build 2>&1 | tee build_output.txt || (cat build_output.txt && exit 1)
+            build 2>&1 | tee build_output.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "=== BUILD ERRORS ==="
+            grep -A 5 "error:" build_output.txt || cat build_output.txt | tail -100
+            exit 1
+          fi
 
       - name: Package IPA
         script: |
           APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: App not found at $APP_PATH"
+            ls -la build/Build/Products/Release-iphoneos/ || echo "Products folder not found"
+            exit 1
+          fi
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -r "chat-ai-tpios.ipa" Payload
-          echo "Build number: $BUILD_NUMBER" > build-info.txt
+          ls -lh chat-ai-tpios.ipa
 
     artifacts:
       - chat-ai-tpios.ipa
-      - build-info.txt
+      - build_output.txt
