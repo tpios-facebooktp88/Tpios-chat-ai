@@ -10,6 +10,15 @@ targets:
       - path: ChatAI
     info:
       path: ChatAI-Info.plist
+      properties:
+        CFBundleDisplayName: "Chat AI"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        LSRequiresIPhoneOS: true
+        NSMicrophoneUsageDescription: "Ứng dụng cần quyền micro để ghi âm giọng nói khi trò chuyện."
     dependencies:
       - sdk: AVFoundation.framework
       - sdk: Speech.framework
