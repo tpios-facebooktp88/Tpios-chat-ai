@@ -175,6 +175,35 @@ final class VoiceManager: NSObject, ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    func stopListeningAndTranscribe(groqAPIKey: String, onFinish: @escaping (String) -> Void) {
+        audioRecorder?.stop()
+        audioRecorder = nil
+        isListening = false
+
+        let fileURL = recordingURL
+        recordingURL = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+
+        guard let url = fileURL else {
+            onFinish("")
+            return
+        }
+
+        Task {
+            do {
+                let text = try await GroqWhisper.transcribe(fileURL: url, apiKey: groqAPIKey)
+                try? FileManager.default.removeItem(at: url)
+                await MainActor.run { onFinish(text) }
+            } catch {
+                try? FileManager.default.removeItem(at: url)
+                await MainActor.run {
+                    self.voiceErrorMessage = "Lỗi nhận dạng giọng nói: \(error.localizedDescription)"
+                    onFinish("")
+                }
+            }
+        }
+    }
+
     // MARK: - TTS
 
     func speak(text: String, gender: VoiceGender, azureKey: String, azureRegion: String) {
