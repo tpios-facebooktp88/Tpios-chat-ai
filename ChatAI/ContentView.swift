@@ -94,6 +94,7 @@ struct ContentView: View {
                 }
                 .padding(.leading)
                 Spacer()
+                LiveCallButton(viewModel: viewModel)
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape").font(.title3)
                 }
