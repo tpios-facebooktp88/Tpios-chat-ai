@@ -3,9 +3,10 @@ import AVFoundation
 
 // =====================================================================
 //  GỌI THOẠI TRỰC TIẾP VỚI GEMINI LIVE  (file độc lập, không phụ thuộc VoiceManager)
-//  - Nói chuyện liên tục như Voice của ChatGPT, có thể ngắt lời (bật trong Tùy chỉnh)
+//  - Nói chuyện liên tục như Voice của ChatGPT
 //  - Bảo AI đổi giọng điệu / tốc độ / vai diễn ngay trong lúc nói
 //  - Chọn giọng + vai diễn + model ngay trong màn hình gọi
+//  - Có bảng Chẩn đoán kỹ thuật để biết âm thanh kẹt ở đâu
 // =====================================================================
 
 // MARK: - Vai diễn, giọng
@@ -80,6 +81,17 @@ enum GeminiLiveModels {
     }
 }
 
+// MARK: - Số liệu mic để chẩn đoán
+
+struct LiveMicStats {
+    var tapBuffers = 0          // số khối âm thanh mic máy đã nhận
+    var sent = 0                // số gói đã gửi lên Google
+    var gated = 0               // số khối bị chặn (lúc AI đang nói)
+    var peak: Float = 0         // mức âm lớn nhất trong 1 giây gần nhất (0...1)
+    var engineRunning = false
+    var restarts = 0
+}
+
 // MARK: - WebSocket tới Gemini Live
 
 final class LiveSocket: @unchecked Sendable {
@@ -152,6 +164,7 @@ final class LiveSocket: @unchecked Sendable {
         task = nil
         lock.unlock()
         current?.cancel(with: .normalClosure, reason: nil)
+        session.invalidateAndCancel()
     }
 }
 
@@ -161,31 +174,66 @@ final class LiveAudioIO: @unchecked Sendable {
     private var engine = AVAudioEngine()
     private var player = AVAudioPlayerNode()
     private var converter: AVAudioConverter?
+    private var configObserver: NSObjectProtocol?
 
     private let sendFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
     private let playFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24000, channels: 1, interleaved: false)!
 
     private let lock = NSLock()
     private var playbackEnd = Date.distantPast
+    private var tapBuffers = 0
+    private var sentChunks = 0
+    private var gatedBuffers = 0
+    private var lastPeak: Float = 0
+
+    private var voiceChatMode = false
+    private var recovering = false
+    private var restartCount = 0
     private(set) var isRunning = false
 
     /// false: tạm ngừng gửi mic trong lúc AI đang nói (tránh tiếng loa vọng vào mic). true: cho phép ngắt lời.
     var allowBargeIn = false
     var onMicChunk: (@Sendable (Data) -> Void)?
+    var onEvent: (@Sendable (String) -> Void)?
+    var onFatal: (@Sendable (String) -> Void)?
 
-    func start() throws {
+    static func routeDescription() -> String {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        let inputs = route.inputs.map { "\($0.portName) (\($0.portType.rawValue))" }.joined(separator: ", ")
+        let outputs = route.outputs.map { "\($0.portName) (\($0.portType.rawValue))" }.joined(separator: ", ")
+        let inText = inputs.isEmpty ? "không có" : inputs
+        let outText = outputs.isEmpty ? "không có" : outputs
+        return "vào: \(inText) | ra: \(outText)"
+    }
+
+    /// voiceChat = false: chế độ đơn giản, dùng mic của máy, không khử vọng (mặc định, ít lỗi nhất).
+    /// voiceChat = true: chế độ gọi, có khử vọng và dùng mic tai nghe Bluetooth nếu có (để ngắt lời được).
+    func start(voiceChat: Bool) throws {
+        voiceChatMode = voiceChat
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+        if voiceChat {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+        } else {
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+        }
         try session.setActive(true)
+        let modeText = voiceChat ? "chế độ gọi (khử vọng)" : "chế độ đơn giản (mic của máy)"
+        onEvent?("Phiên âm thanh: \(modeText)")
 
         do {
-            try startEngine(voiceProcessing: true)   // có khử tiếng vọng
+            try startEngine(voiceProcessing: voiceChat)
         } catch {
             discardEngine()
-            do {
-                try startEngine(voiceProcessing: false)
-            } catch {
-                discardEngine()
+            if voiceChat {
+                onEvent?("Bật khử vọng bị lỗi (\(error.localizedDescription)), thử lại không khử vọng")
+                do {
+                    try startEngine(voiceProcessing: false)
+                } catch {
+                    discardEngine()
+                    try? session.setActive(false)
+                    throw error
+                }
+            } else {
                 try? session.setActive(false)
                 throw error
             }
@@ -215,12 +263,59 @@ final class LiveAudioIO: @unchecked Sendable {
         input.installTap(onBus: 0, bufferSize: 2048, format: micFormat) { [weak self] buffer, _ in
             self?.handleMic(buffer)
         }
+
+        observeConfigChanges()
         engine.prepare()
         try engine.start()
         player.play()
+
+        let vpText = voiceProcessing ? "bật" : "tắt"
+        onEvent?("Mic \(Int(micFormat.sampleRate)) Hz, \(micFormat.channelCount) kênh, khử vọng \(vpText). Tuyến: \(LiveAudioIO.routeDescription())")
+    }
+
+    private func observeConfigChanges() {
+        removeObserver()
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            DispatchQueue.main.async { self?.recoverFromConfigChange() }
+        }
+    }
+
+    private func removeObserver() {
+        if let token = configObserver {
+            NotificationCenter.default.removeObserver(token)
+            configObserver = nil
+        }
+    }
+
+    /// Khi iOS đổi tuyến âm thanh (cắm/rút tai nghe, Bluetooth...) nó tự dừng engine. Ở đây khởi động lại.
+    private func recoverFromConfigChange() {
+        guard isRunning, !recovering else { return }
+        recovering = true
+        restartCount += 1
+        onEvent?("Âm thanh vừa đổi cấu hình (tai nghe, Bluetooth hoặc loa), khởi động lại lần \(restartCount)")
+        discardEngine()
+
+        if restartCount > 4 {
+            recovering = false
+            onFatal?("Âm thanh liên tục bị đổi cấu hình. Thử tắt Bluetooth hoặc rút tai nghe rồi gọi lại.")
+            return
+        }
+        do {
+            try startEngine(voiceProcessing: voiceChatMode && restartCount < 2)
+        } catch {
+            recovering = false
+            onFatal?("Không khởi động lại được âm thanh: \(error.localizedDescription)")
+            return
+        }
+        recovering = false
     }
 
     private func discardEngine() {
+        removeObserver()
         engine.inputNode.removeTap(onBus: 0)
         if engine.isRunning {
             engine.stop()
@@ -235,6 +330,21 @@ final class LiveAudioIO: @unchecked Sendable {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    func snapshot() -> LiveMicStats {
+        lock.lock()
+        defer { lock.unlock() }
+        let stats = LiveMicStats(
+            tapBuffers: tapBuffers,
+            sent: sentChunks,
+            gated: gatedBuffers,
+            peak: lastPeak,
+            engineRunning: engine.isRunning,
+            restarts: restartCount
+        )
+        lastPeak = 0
+        return stats
+    }
+
     private var isPlaybackActive: Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -242,7 +352,16 @@ final class LiveAudioIO: @unchecked Sendable {
     }
 
     private func handleMic(_ buffer: AVAudioPCMBuffer) {
-        if !allowBargeIn && isPlaybackActive { return }
+        lock.lock()
+        tapBuffers += 1
+        lock.unlock()
+
+        if !allowBargeIn && isPlaybackActive {
+            lock.lock()
+            gatedBuffers += 1
+            lock.unlock()
+            return
+        }
         guard let converter else { return }
 
         let ratio = sendFormat.sampleRate / buffer.format.sampleRate
@@ -267,7 +386,20 @@ final class LiveAudioIO: @unchecked Sendable {
             let channel = out.int16ChannelData
         else { return }
 
-        let data = Data(bytes: channel[0], count: Int(out.frameLength) * MemoryLayout<Int16>.size)
+        let frames = Int(out.frameLength)
+        let samples = channel[0]
+        var peak: Int32 = 0
+        for i in 0..<frames {
+            let magnitude = abs(Int32(samples[i]))
+            if magnitude > peak { peak = magnitude }
+        }
+
+        lock.lock()
+        sentChunks += 1
+        lastPeak = max(lastPeak, Float(peak) / 32768.0)
+        lock.unlock()
+
+        let data = Data(bytes: samples, count: frames * MemoryLayout<Int16>.size)
         onMicChunk?(data)
     }
 
@@ -324,6 +456,10 @@ final class LiveVoiceManager: ObservableObject {
     @Published var lines: [Line] = []
     @Published var aiSpeaking = false
     @Published var errorText: String?
+    @Published var events: [String] = []
+    @Published var micStats = LiveMicStats()
+    @Published var serverMessages = 0
+    @Published var audioChunksIn = 0
 
     private var socket: LiveSocket?
     private var audio: LiveAudioIO?
@@ -331,6 +467,40 @@ final class LiveVoiceManager: ObservableObject {
     private var openAI: Int?
     private var bargeIn = false
     private var callGeneration = 0
+    private var statsTask: Task<Void, Never>?
+    private var seenKinds = Set<String>()
+    private var callInfo = ""
+    private let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
+    /// Báo cáo kỹ thuật để copy gửi cho người hỗ trợ.
+    var report: String {
+        let stats = micStats
+        let engineText = stats.engineRunning ? "chạy" : "DỪNG"
+        let level = Int(stats.peak * 100)
+        var rows: [String] = []
+        rows.append(callInfo)
+        rows.append("Mic: nhận \(stats.tapBuffers) khối, đã gửi \(stats.sent), bị chặn \(stats.gated), mức \(level)%, engine \(engineText), khởi động lại \(stats.restarts) lần")
+        rows.append("Google: \(serverMessages) tin, \(audioChunksIn) gói tiếng")
+        rows.append(contentsOf: events)
+        return rows.joined(separator: "\n")
+    }
+
+    private func note(_ text: String) {
+        events.append("\(clock.string(from: Date())) \(text)")
+        if events.count > 60 {
+            events.removeFirst(events.count - 60)
+        }
+    }
+
+    private func noteKind(_ kind: String) {
+        if seenKinds.insert(kind).inserted {
+            note("Google gửi: \(kind)")
+        }
+    }
 
     func start(model: String, voice: String, persona: String, bargeIn: Bool) {
         guard state == .idle else { return }
@@ -344,7 +514,15 @@ final class LiveVoiceManager: ObservableObject {
         aiSpeaking = false
         openUser = nil
         openAI = nil
+        events = []
+        seenKinds = []
+        micStats = LiveMicStats()
+        serverMessages = 0
+        audioChunksIn = 0
         self.bargeIn = bargeIn
+        let modeText = bargeIn ? "ngắt lời (khử vọng)" : "đơn giản"
+        callInfo = "Model \(model) | giọng \(voice) | chế độ \(modeText)"
+        note("Bắt đầu gọi. \(callInfo)")
         state = .connecting
 
         AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
@@ -391,6 +569,20 @@ final class LiveVoiceManager: ObservableObject {
         sock.onClose = { [weak self] reason in
             Task { @MainActor in self?.socketClosed(reason, generation: generation) }
         }
+        io.onEvent = { [weak self] text in
+            Task { @MainActor in
+                guard let self, self.callGeneration == generation else { return }
+                self.note(text)
+            }
+        }
+        io.onFatal = { [weak self] text in
+            Task { @MainActor in
+                guard let self, self.callGeneration == generation else { return }
+                self.fail(text)
+            }
+        }
+
+        note("Đang kết nối tới Google...")
         sock.connect(apiKey: key)
 
         let voiceConfig: [String: Any] = ["prebuiltVoiceConfig": ["voiceName": voice]]
@@ -406,20 +598,32 @@ final class LiveVoiceManager: ObservableObject {
             "outputAudioTranscription": [String: String]()
         ]
         sock.send(["setup": setup])
+        note("Đã gửi cấu hình phiên, chờ Google xác nhận")
     }
 
     private func handle(_ data: Data, generation: Int) {
         guard generation == callGeneration else { return }
-        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            note("Nhận gói không đọc được (\(data.count) byte)")
+            return
+        }
+        serverMessages += 1
+        for key in object.keys { noteKind(key) }
 
         if object["setupComplete"] != nil {
+            note("Google xác nhận kết nối")
             beginStreaming()
+            return
+        }
+        if let failure = object["error"] {
+            fail("Google báo lỗi: \(failure)")
             return
         }
         if object["goAway"] != nil {
             errorText = "Google sắp ngắt phiên này vì hết thời lượng. Bấm gọi lại để tiếp tục."
         }
         guard let content = object["serverContent"] as? [String: Any] else { return }
+        for key in content.keys { noteKind("serverContent." + key) }
 
         if content["interrupted"] as? Bool == true {
             audio?.flushPlayback()
@@ -438,6 +642,7 @@ final class LiveVoiceManager: ObservableObject {
                     let pcm = Data(base64Encoded: encoded)
                 {
                     aiSpeaking = true
+                    audioChunksIn += 1
                     audio?.enqueue(pcm16: pcm)
                 }
             }
@@ -477,10 +682,24 @@ final class LiveVoiceManager: ObservableObject {
         guard let io = audio, let sock = socket else { return }
         io.onMicChunk = { data in sock.sendAudio(data) }
         do {
-            try io.start()
+            try io.start(voiceChat: bargeIn)
             state = .live
+            startStatsLoop()
         } catch {
             fail("Không bật được micro hoặc loa: \(error.localizedDescription)")
+        }
+    }
+
+    private func startStatsLoop() {
+        statsTask?.cancel()
+        statsTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                if let io = self.audio {
+                    self.micStats = io.snapshot()
+                }
+            }
         }
     }
 
@@ -491,11 +710,14 @@ final class LiveVoiceManager: ObservableObject {
 
     private func fail(_ message: String) {
         errorText = message
+        note("LỖI: \(message)")
         teardown()
     }
 
     private func teardown() {
         callGeneration += 1   // bỏ qua mọi tin nhắn muộn của cuộc gọi cũ
+        statsTask?.cancel()
+        statsTask = nil
         audio?.stop()
         audio = nil
         socket?.close()
@@ -505,6 +727,9 @@ final class LiveVoiceManager: ObservableObject {
     }
 
     func end() {
+        if state != .idle {
+            note("Người dùng kết thúc cuộc gọi")
+        }
         teardown()
     }
 
@@ -572,14 +797,29 @@ struct LiveCallView: View {
     @AppStorage("live_barge_in") private var bargeIn: Bool = false
 
     @State private var showOptions = false
+    @State private var showDiagnostics = false
     @State private var showModelPicker = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                transcript
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            transcriptContent
+                            optionsGroup
+                            diagnosticsGroup
+                        }
+                        .padding()
+                    }
+                    .onChange(of: manager.lines.count) { _ in
+                        if let last = manager.lines.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                    }
+                }
                 Divider()
-                controls
+                bottomBar
             }
             .navigationTitle("Gọi thoại Gemini")
             .navigationBarTitleDisplayMode(.inline)
@@ -601,27 +841,15 @@ struct LiveCallView: View {
         }
     }
 
-    private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if manager.lines.isEmpty {
-                        Text("Bấm Bắt đầu gọi rồi cứ nói tự nhiên. Muốn đổi giọng, vai diễn hay tốc độ thì nói thẳng với AI. Ví dụ: nói chậm lại, giả làm giáo viên, nói giọng miền Nam.")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .padding(.vertical, 8)
-                    }
-                    ForEach(manager.lines) { line in
-                        LiveLineRow(line: line).id(line.id)
-                    }
-                }
-                .padding()
-            }
-            .onChange(of: manager.lines.count) { _ in
-                if let last = manager.lines.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
-            }
+    @ViewBuilder
+    private var transcriptContent: some View {
+        if manager.lines.isEmpty {
+            Text("Bấm Bắt đầu gọi rồi cứ nói tự nhiên. Muốn đổi giọng, vai diễn hay tốc độ thì nói thẳng với AI. Ví dụ: nói chậm lại, giả làm giáo viên, nói giọng miền Nam.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        }
+        ForEach(manager.lines) { line in
+            LiveLineRow(line: line).id(line.id)
         }
     }
 
@@ -633,11 +861,23 @@ struct LiveCallView: View {
         }
     }
 
-    private var controls: some View {
-        VStack(spacing: 12) {
+    private var liveCounters: String {
+        let stats = manager.micStats
+        let level = Int(stats.peak * 100)
+        return "Mic đã gửi \(stats.sent) gói, mức \(level)% | Google \(manager.serverMessages) tin, \(manager.audioChunksIn) gói tiếng"
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 10) {
             Text(statusText)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+
+            if manager.state != .idle {
+                Text(liveCounters)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
 
             if let message = manager.errorText {
                 HStack(alignment: .top) {
@@ -676,15 +916,17 @@ struct LiveCallView: View {
                 }
                 .font(.footnote)
             }
-
-            DisclosureGroup("Tùy chỉnh giọng, vai diễn, model", isExpanded: $showOptions) {
-                options
-            }
         }
         .padding()
     }
 
-    private var options: some View {
+    private var optionsGroup: some View {
+        DisclosureGroup("Tùy chỉnh giọng, vai diễn, model", isExpanded: $showOptions) {
+            optionsBody
+        }
+    }
+
+    private var optionsBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             Picker("Giọng", selection: $voice) {
                 ForEach(LiveVoices.all) { item in
@@ -716,14 +958,30 @@ struct LiveCallView: View {
                 Button("Danh sách") { showModelPicker = true }
             }
 
-            Toggle("Cho phép ngắt lời (nên dùng tai nghe)", isOn: $bargeIn)
+            Toggle("Cho phép ngắt lời (chế độ khử vọng, nên dùng tai nghe)", isOn: $bargeIn)
 
-            Text("Đổi giọng hoặc vai diễn ở đây sẽ áp dụng từ lần Bắt đầu gọi kế tiếp. Đổi giọng điệu trong lúc đang nói thì cứ nói thẳng với AI.")
+            Text("Mặc định tắt: dùng mic của máy và tạm nghỉ mic lúc AI đang nói, ít lỗi nhất. Đổi giọng hoặc vai diễn ở đây áp dụng từ lần Bắt đầu gọi kế tiếp. Đổi giọng điệu trong lúc đang nói thì cứ nói thẳng với AI.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
         .disabled(manager.state != .idle)
         .padding(.top, 8)
+    }
+
+    private var diagnosticsGroup: some View {
+        DisclosureGroup("Chẩn đoán kỹ thuật (gửi tôi khi có lỗi)", isExpanded: $showDiagnostics) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(manager.report)
+                    .font(.system(.caption2, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Copy báo cáo") {
+                    UIPasteboard.general.string = manager.report
+                }
+                .font(.footnote)
+            }
+            .padding(.top, 6)
+        }
     }
 }
 
