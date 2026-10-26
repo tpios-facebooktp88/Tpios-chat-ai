@@ -460,6 +460,7 @@ final class LiveVoiceManager: ObservableObject {
     @Published var micStats = LiveMicStats()
     @Published var serverMessages = 0
     @Published var audioChunksIn = 0
+    @Published var faceExpression: RobotFaceExpression = .idle
 
     private var socket: LiveSocket?
     private var audio: LiveAudioIO?
@@ -582,6 +583,7 @@ final class LiveVoiceManager: ObservableObject {
             }
         }
 
+        faceExpression = .thinking
         note("Đang kết nối tới Google...")
         sock.connect(apiKey: key)
 
@@ -641,6 +643,7 @@ final class LiveVoiceManager: ObservableObject {
                     let encoded = inline["data"] as? String,
                     let pcm = Data(base64Encoded: encoded)
                 {
+                    if !aiSpeaking { faceExpression = .speaking }
                     aiSpeaking = true
                     audioChunksIn += 1
                     audio?.enqueue(pcm16: pcm)
@@ -652,11 +655,13 @@ final class LiveVoiceManager: ObservableObject {
         }
         if let item = content["outputTranscription"] as? [String: Any], let text = item["text"] as? String {
             append(.assistant, text)
+            if let mood = RobotFaceMood.guess(from: text) { faceExpression = mood }
         }
         if content["turnComplete"] as? Bool == true {
             aiSpeaking = false
             openUser = nil
             openAI = nil
+            faceExpression = .idle
         }
     }
 
@@ -680,10 +685,16 @@ final class LiveVoiceManager: ObservableObject {
 
     private func beginStreaming() {
         guard let io = audio, let sock = socket else { return }
-        io.onMicChunk = { data in sock.sendAudio(data) }
+        io.onMicChunk = { [weak self] data in
+            sock.sendAudio(data)
+            Task { @MainActor in
+                if self?.faceExpression == .idle { self?.faceExpression = .listening }
+            }
+        }
         do {
             try io.start(voiceChat: bargeIn)
             state = .live
+            faceExpression = .listening
             startStatsLoop()
         } catch {
             fail("Không bật được micro hoặc loa: \(error.localizedDescription)")
@@ -806,6 +817,7 @@ struct LiveCallView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
+                            robotFaceSection
                             transcriptContent
                             optionsGroup
                             diagnosticsGroup
@@ -839,6 +851,23 @@ struct LiveCallView: View {
                 )
             }
         }
+    }
+
+    @ViewBuilder
+    private var robotFaceSection: some View {
+        RobotFaceView(
+            expression: manager.faceExpression,
+            speakingLevel: { date in
+                guard manager.aiSpeaking else { return 0 }
+                let t = date.timeIntervalSinceReferenceDate
+                return CGFloat(abs(sin(t * 9.0)) * (0.5 + 0.5 * abs(sin(t * 2.3))))
+            },
+            isListening: manager.state == .live && !manager.aiSpeaking,
+            onTap: { }
+        )
+        .frame(height: 220)
+        .background(Color(red: 0.04, green: 0.05, blue: 0.13).cornerRadius(20))
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
