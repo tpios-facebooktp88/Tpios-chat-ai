@@ -45,6 +45,7 @@ struct RobotParams {
     var rightEyeScale: CGFloat = 1.0
     var blush:    CGFloat = 1.0
     var mouthKind: MouthKind = .omega
+    var mouthOpen: CGFloat = 0.0
     var tear:     Bool = false
 
     enum MouthKind { case omega, smile, frown, flat, wavy, tiny, open, o }
@@ -61,6 +62,7 @@ struct RobotParams {
         r.lookY         = m(a.lookY, b.lookY)
         r.rightEyeScale = m(a.rightEyeScale, b.rightEyeScale)
         r.blush         = m(a.blush, b.blush)
+        r.mouthOpen     = m(a.mouthOpen, b.mouthOpen)
         r.tear          = t < 0.5 ? a.tear : b.tear
         r.mouthKind     = t < 0.5 ? a.mouthKind : b.mouthKind
         return r
@@ -73,7 +75,7 @@ struct RobotParams {
         case .idle:      break
         case .listening: p.eyeOpen = 1.1
         case .thinking:  p.lookX = 0.75; p.lookY = -0.65; p.mouthKind = .flat
-        case .speaking:  p.eyeSmile = 1.0; p.mouthKind = .open
+        case .speaking:  p.eyeSmile = 1.0; p.mouthKind = .open; p.mouthOpen = 0.35
         case .happy:     p.eyeSmile = 1.0; p.mouthKind = .smile; p.blush = 1.4
         case .surprised: p.eyeOpen = 1.18; p.mouthKind = .o
         case .confused:  p.rightEyeScale = 0.82; p.lookX = 0.5; p.lookY = -0.2; p.mouthKind = .wavy
@@ -706,7 +708,7 @@ enum RobotRenderer {
             let r1 = S*0.034, r2 = S*0.010
             var star = Path()
             for k in 0..<8 {
-                let ang = CGFloat(k)*2*.pi/8 - .pi/2
+                let ang = CGFloat(k) * 2 * CGFloat.pi / 8 - CGFloat.pi / 2
                 let rr  = k%2==0 ? r1 : r2
                 star.addLine(to: CGPoint(x:sc_.x+cos(ang)*rr, y:sc_.y+sin(ang)*rr))
             }
@@ -719,7 +721,7 @@ enum RobotRenderer {
             let ac = CGPoint(x:cx+S*0.31, y:cy-S*0.22)
             let redA = Color(red:1,green:0.27,blue:0.39)
             for k in 0..<4 {
-                let ang = CGFloat(k)*2*.pi/4 + .pi/4
+                let ang = CGFloat(k) * 2 * CGFloat.pi / 4 + CGFloat.pi / 4
                 let tip = CGPoint(x: ac.x + cos(ang)*S*0.026, y: ac.y + sin(ang)*S*0.026)
                 var line = Path()
                 line.move(to: CGPoint(x:tip.x+cos(ang+1.1)*S*0.024, y:tip.y+sin(ang+1.1)*S*0.024))
