@@ -69,10 +69,11 @@ final class ChatViewModel: ObservableObject {
         currentSession = session
     }
 
-    func send() {
+    func send(attachments: [ChatAttachment] = []) {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isSending else { return }
-        messages.append(ChatMessage(role: .user, content: trimmed))
+        guard !trimmed.isEmpty || !attachments.isEmpty, !isSending else { return }
+        let text = trimmed.isEmpty ? "(đính kèm)" : trimmed
+        messages.append(ChatMessage(role: .user, content: text, attachments: attachments))
         inputText = ""
         isSending = true
         errorMessage = nil
@@ -136,11 +137,12 @@ final class ChatViewModel: ObservableObject {
         if let memoryPrompt = HistoryManager.shared.memorySystemPrompt {
             history.insert(ChatMessage(role: .system, content: memoryPrompt), at: 0)
         }
+        let lastAtt = messages.last(where: { $0.role == .user })?.attachments ?? []
         switch selectedProvider {
-        case .openAI:    return try await openAIService.sendMessage(history: history, apiKey: key, model: openAIModel)
-        case .anthropic: return try await anthropicService.sendMessage(history: history, apiKey: key, model: anthropicModel)
-        case .gemini:    return try await geminiService.sendMessage(history: history, apiKey: key, model: geminiModel)
-        case .grok:      return try await grokService.sendMessage(history: history, apiKey: key, model: grokModel)
+        case .openAI:    return try await openAIService.sendMessage(history: history, apiKey: key, model: openAIModel, attachments: lastAtt)
+        case .anthropic: return try await anthropicService.sendMessage(history: history, apiKey: key, model: anthropicModel, attachments: lastAtt)
+        case .gemini:    return try await geminiService.sendMessage(history: history, apiKey: key, model: geminiModel, attachments: lastAtt)
+        case .grok:      return try await grokService.sendMessage(history: history, apiKey: key, model: grokModel, attachments: lastAtt)
         case .deepseek:  return try await deepseekService.sendMessage(history: history, apiKey: key, model: deepseekModel)
         case .groq:      return try await groqService.sendMessage(history: history, apiKey: key, model: groqModel)
         }
