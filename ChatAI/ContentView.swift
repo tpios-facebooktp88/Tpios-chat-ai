@@ -7,6 +7,11 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showHistory = false
     @State private var showProviderMenu = false
+    @State private var pendingAttachments: [ChatAttachment] = []
+    @State private var showAttachMenu = false
+    @State private var showImagePicker = false
+    @State private var showFilePicker  = false
+    @State private var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,6 +80,24 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showHistory) { HistoryView(viewModel: viewModel) }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePickerView(sourceType: imagePickerSource) { image in
+                if let att = try? AttachmentService.encode(image: image) {
+                    if pendingAttachments.count < AttachmentService.maxAttachments(viewModel.selectedProvider) {
+                        pendingAttachments.append(att)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showFilePicker) {
+            DocumentPickerView { url in
+                guard let data = try? Data(contentsOf: url) else { return }
+                let att = AttachmentService.encode(pdfData: data, fileName: url.lastPathComponent)
+                if pendingAttachments.count < AttachmentService.maxAttachments(viewModel.selectedProvider) {
+                    pendingAttachments.append(att)
+                }
+            }
+        }
         .onAppear {
             viewModel.onSpeakReply = { text, gender in
                 let azureKey    = KeychainHelper.read(forKey: "azure_tts_key") ?? ""
@@ -132,32 +155,110 @@ struct ContentView: View {
     // MARK: - Input bar
 
     private var inputBar: some View {
-        HStack {
-            Button {
-                let groqKey = KeychainHelper.read(forKey: AIProviderKind.groq.keychainKey) ?? ""
-                voiceManager.startListening(
-                    groqAPIKey: groqKey,
-                    onPartialResult: { viewModel.inputText = $0 },
-                    onFinish: { text in
-                        viewModel.inputText = text
-                        viewModel.send()
+        let supportsAtt = AttachmentService.supportsAttachments(viewModel.selectedProvider)
+        let maxAtt = AttachmentService.maxAttachments(viewModel.selectedProvider)
+        return VStack(spacing: 0) {
+            // ── Thumbnail strip ──────────────────────────────────────────
+            if !pendingAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingAttachments) { att in
+                            ZStack(alignment: .topTrailing) {
+                                if let img = att.thumbnail {
+                                    Image(uiImage: img)
+                                        .resizable().scaledToFill()
+                                        .frame(width: 62, height: 62)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.secondarySystemBackground))
+                                        .frame(width: 62, height: 62)
+                                        .overlay(Image(systemName: "doc.fill").foregroundColor(.secondary))
+                                }
+                                Button {
+                                    pendingAttachments.removeAll { $0.id == att.id }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.white)
+                                        .background(Color.black.opacity(0.55).clipShape(Circle()))
+                                }
+                                .offset(x: 5, y: -5)
+                            }
+                        }
                     }
-                )
-            } label: {
-                Image(systemName: voiceManager.isListening ? "mic.fill" : "mic")
-                    .foregroundColor(voiceManager.isListening ? .red : .accentColor)
+                    .padding(.horizontal)
+                    .padding(.vertical, 6)
+                }
+                Divider()
             }
-
-            TextField("Nhập tin nhắn hoặc nhấn mic...", text: $viewModel.inputText, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...4)
-
-            Button { viewModel.send() } label: {
-                Image(systemName: "paperplane.fill")
+            // ── Input row ────────────────────────────────────────────────
+            HStack {
+                // Nút + đính kèm (ẩn khi provider không hỗ trợ hoặc đủ số lượng)
+                if supportsAtt {
+                    Menu {
+                        Button {
+                            imagePickerSource = .photoLibrary
+                            showImagePicker = true
+                        } label: {
+                            Label("Chọn ảnh từ thư viện", systemImage: "photo.on.rectangle")
+                        }
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            Button {
+                                imagePickerSource = .camera
+                                showImagePicker = true
+                            } label: {
+                                Label("Chụp ảnh", systemImage: "camera")
+                            }
+                        }
+                        Button {
+                            showFilePicker = true
+                        } label: {
+                            Label("Chọn file PDF", systemImage: "doc")
+                        }
+                    } label: {
+                        Image(systemName: pendingAttachments.count >= maxAtt ? "plus.circle" : "plus.circle")
+                            .font(.title3)
+                            .foregroundColor(pendingAttachments.count >= maxAtt ? .secondary : .accentColor)
+                    }
+                    .disabled(pendingAttachments.count >= maxAtt)
+                }
+                // Nút mic
+                Button {
+                    let groqKey = KeychainHelper.read(forKey: AIProviderKind.groq.keychainKey) ?? ""
+                    if voiceManager.isListening {
+                        voiceManager.stopListeningAndTranscribe(groqAPIKey: groqKey) { text in
+                            viewModel.inputText = text
+                            viewModel.send(attachments: pendingAttachments)
+                            pendingAttachments = []
+                        }
+                    } else {
+                        voiceManager.startListening(
+                            groqAPIKey: groqKey,
+                            onPartialResult: { viewModel.inputText = $0 },
+                            onFinish: { text in
+                                viewModel.inputText = text
+                                viewModel.send(attachments: pendingAttachments)
+                                pendingAttachments = []
+                            }
+                        )
+                    }
+                } label: {
+                    Image(systemName: voiceManager.isListening ? "mic.fill" : "mic")
+                        .foregroundColor(voiceManager.isListening ? .red : .accentColor)
+                }
+                TextField("Nhập tin nhắn hoặc nhấn mic...", text: $viewModel.inputText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                Button {
+                    viewModel.send(attachments: pendingAttachments)
+                    pendingAttachments = []
+                } label: {
+                    Image(systemName: "paperplane.fill")
+                }
+                .disabled(viewModel.inputText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isSending)
             }
-            .disabled(viewModel.inputText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isSending)
+            .padding()
         }
-        .padding()
     }
 }
 
@@ -172,6 +273,31 @@ struct MessageBubble: View {
             if message.role == .user { Spacer(minLength: 40) }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+                // Thumbnails
+                if message.hasAttachments {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(message.attachments) { att in
+                                if let img = att.thumbnail {
+                                    Image(uiImage: img)
+                                        .resizable().scaledToFill()
+                                        .frame(width: 140, height: 140)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.secondarySystemBackground))
+                                        .frame(width: 80, height: 80)
+                                        .overlay(
+                                            VStack(spacing: 4) {
+                                                Image(systemName: "doc.fill").font(.title2)
+                                                Text(att.fileName).font(.caption2).lineLimit(2)
+                                            }.foregroundColor(.secondary)
+                                        )
+                                }
+                            }
+                        }
+                    }
+                }
                 Text(message.content)
                     .padding(10)
                     .background(message.role == .user
@@ -342,6 +468,65 @@ struct MemoryView: View {
                     Button("Đóng") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+
+// MARK: - ImagePickerView (UIImagePickerController wrapper)
+
+import PhotosUI
+
+struct ImagePickerView: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onPick: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick: onPick) }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.allowsEditing = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onPick: (UIImage) -> Void
+        init(onPick: @escaping (UIImage) -> Void) { self.onPick = onPick }
+
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let img = info[.originalImage] as? UIImage { onPick(img) }
+            picker.dismiss(animated: true)
+        }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
+    }
+}
+
+// MARK: - DocumentPickerView (UIDocumentPickerViewController wrapper, PDF only)
+
+struct DocumentPickerView: UIViewControllerRepresentable {
+    let onPick: (URL) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick: onPick) }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf], asCopy: true)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: (URL) -> Void
+        init(onPick: @escaping (URL) -> Void) { self.onPick = onPick }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            if let url = urls.first { onPick(url) }
         }
     }
 }
