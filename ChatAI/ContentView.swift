@@ -202,14 +202,17 @@ struct ContentView: View {
                         } label: {
                             Label("Chọn ảnh từ thư viện", systemImage: "photo.on.rectangle")
                         }
-                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                                if UIImagePickerController.isSourceTypeAvailable(.camera) {
                             Button {
                                 imagePickerSource = .camera
-                                showImagePicker = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    showImagePicker = true
+                                }
                             } label: {
                                 Label("Chụp ảnh", systemImage: "camera")
                             }
                         }
+
                         Button {
                             showFilePicker = true
                         } label: {
