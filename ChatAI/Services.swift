@@ -5,13 +5,18 @@ import Security
 
 struct OpenAICompatibleService {
     let baseURL: URL
-    func sendMessage(history: [ChatMessage], apiKey: String, model: String) async throws -> String {
+    func sendMessage(history: [ChatMessage], apiKey: String, model: String, attachments: [ChatAttachment] = []) async throws -> String {
         guard !apiKey.isEmpty else { throw AIProviderError.missingAPIKey }
         var request = URLRequest(url: baseURL)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let messages = history.map { ["role": $0.role.rawValue, "content": $0.content] }
+        let messages: [[String: Any]] = history.map { msg in
+            if msg == history.last(where: { $0.role == .user }), !attachments.isEmpty {
+                return ["role": msg.role.rawValue, "content": AttachmentService.openAIContent(text: msg.content, attachments: attachments)]
+            }
+            return ["role": msg.role.rawValue, "content": msg.content as Any]
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "messages": messages])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -26,14 +31,20 @@ struct OpenAICompatibleService {
 }
 
 struct AnthropicService {
-    func sendMessage(history: [ChatMessage], apiKey: String, model: String) async throws -> String {
+    func sendMessage(history: [ChatMessage], apiKey: String, model: String, attachments: [ChatAttachment] = []) async throws -> String {
         guard !apiKey.isEmpty else { throw AIProviderError.missingAPIKey }
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let messages = history.filter { $0.role != .system }.map { ["role": $0.role == .assistant ? "assistant" : "user", "content": $0.content] }
+        let lastUserAnt = history.filter({ $0.role != .system }).last(where: { $0.role == .user })
+        let messages: [[String: Any]] = history.filter { $0.role != .system }.map { msg -> [String: Any] in
+            if msg == lastUserAnt, !attachments.isEmpty {
+                return ["role": "user", "content": AttachmentService.anthropicContent(text: msg.content, attachments: attachments)]
+            }
+            return ["role": msg.role == .assistant ? "assistant" : "user", "content": msg.content]
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "max_tokens": 1024, "messages": messages])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -48,14 +59,20 @@ struct AnthropicService {
 }
 
 struct GeminiService {
-    func sendMessage(history: [ChatMessage], apiKey: String, model: String) async throws -> String {
+    func sendMessage(history: [ChatMessage], apiKey: String, model: String, attachments: [ChatAttachment] = []) async throws -> String {
         guard !apiKey.isEmpty else { throw AIProviderError.missingAPIKey }
         let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)"
         guard let url = URL(string: urlString) else { throw AIProviderError.invalidResponse }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let contents = history.filter { $0.role != .system }.map { m -> [String: Any] in ["role": m.role == .assistant ? "model" : "user", "parts": [["text": m.content]]] }
+        let lastUserGem = history.filter({ $0.role != .system }).last(where: { $0.role == .user })
+        let contents: [[String: Any]] = history.filter { $0.role != .system }.map { m -> [String: Any] in
+            if m == lastUserGem, !attachments.isEmpty {
+                return ["role": "user", "parts": AttachmentService.geminiParts(text: m.content, attachments: attachments)]
+            }
+            return ["role": m.role == .assistant ? "model" : "user", "parts": [["text": m.content]]]
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: ["contents": contents])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
