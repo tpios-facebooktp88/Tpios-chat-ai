@@ -20,3 +20,9 @@
     <string>Ứng dụng cần quyền micro để ghi âm giọng nói khi trò chuyện.</string>
 </dict>
 </plist>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Ứng dụng cần truy cập thư viện ảnh để đính kèm ảnh vào tin nhắn.</string>
+<key>NSCameraUsageDescription</key>
+<string>Ứng dụng cần camera để chụp ảnh đính kèm vào tin nhắn.</string>
+
+
