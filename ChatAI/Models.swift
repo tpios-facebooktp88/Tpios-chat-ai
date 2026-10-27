@@ -6,14 +6,19 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     let id: UUID
     let role: ChatRole
     var content: String
+    var attachments: [ChatAttachment]
     let createdAt: Date
 
-    init(id: UUID = UUID(), role: ChatRole, content: String, createdAt: Date = Date()) {
+    init(id: UUID = UUID(), role: ChatRole, content: String,
+         attachments: [ChatAttachment] = [], createdAt: Date = Date()) {
         self.id = id
         self.role = role
         self.content = content
+        self.attachments = attachments
         self.createdAt = createdAt
     }
+
+    var hasAttachments: Bool { !attachments.isEmpty }
 }
 
 enum AIProviderKind: String, CaseIterable, Identifiable, Codable {
