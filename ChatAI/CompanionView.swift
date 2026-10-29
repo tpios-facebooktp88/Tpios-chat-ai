@@ -10,9 +10,9 @@ import SwiftUI
 //  • RobotFacePreviewView → gallery xem thử biểu cảm
 //
 //  Ảnh cần có trong ChatAI/ (cùng thư mục file .swift):
-//    companion_neutral.jpg   companion_happy.jpg    companion_surprised.jpg
-//    companion_thinking.jpg  companion_angry.jpg    companion_wink.jpg
-//    companion_speaking.jpg  companion_sleepy.jpg
+//    companion_neutral.png   companion_happy.png    companion_surprised.png
+//    companion_thinking.png  companion_angry.png    companion_wink.png
+//    companion_speaking.png  companion_sleepy.png
 // ─────────────────────────────────────────────────────────────────────────────
 
 // MARK: - Expression (giữ tên cũ để LiveVoice.swift không đổi gì)
