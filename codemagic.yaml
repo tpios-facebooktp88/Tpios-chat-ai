@@ -50,51 +50,7 @@ workflows:
             echo "=== BUILD ERRORS ==="
             grep -A 5 "error:" build_output.txt || tail -100 build_output.txt
             exit 1
-          fi
-
-      - name: Copy and verify 8 transparent expression PNGs
-        script: |
-          set -eu
-          APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
-          SOURCE_DIR="ChatAI"
-          if [ ! -d "$APP_PATH" ]; then
-            echo "ERROR: Built app not found: $APP_PATH"
-            exit 1
-          fi
-          if [ ! -d "$SOURCE_DIR" ]; then
-            echo "ERROR: Image source folder not found: $SOURCE_DIR"
-            exit 1
-          fi
-
-          images=(
-            companion_angry.png
-            companion_happy.png
-            companion_neutral.png
-            companion_sleepy.png
-            companion_speaking.png
-            companion_surprised.png
-            companion_thinking.png
-            companion_wink.png
-          )
-
-          echo "=== Copy transparent PNGs into ChatAI.app ==="
-          mkdir -p "$APP_PATH/ChatAI"
-
-          for image in "${images[@]}"; do
-            if [ ! -s "$SOURCE_DIR/$image" ]; then
-              echo "ERROR: Source PNG missing or empty: $SOURCE_DIR/$image"
-              exit 1
-            fi
-            cp "$SOURCE_DIR/$image" "$APP_PATH/ChatAI/$image"
-            if [ -s "$APP_PATH/ChatAI/$image" ]; then
-              echo "OK: $image"
-            else
-              echo "ERROR: Failed to bundle $image"
-              exit 1
-            fi
-          done
-          echo "SUCCESS: All 8 transparent PNGs are bundled."
-          
+          fi 
       - name: Package IPA
         script: |
           APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
