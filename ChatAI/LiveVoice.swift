@@ -814,10 +814,15 @@ struct LiveCallView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Robot cố định phía trên, không bị scroll đẩy lên
+                robotFaceSection
+
+                Divider()
+
+                // Chỉ phần chat + options scroll
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
-                            robotFaceSection
                             transcriptContent
                             optionsGroup
                             diagnosticsGroup
@@ -830,6 +835,7 @@ struct LiveCallView: View {
                         }
                     }
                 }
+
                 Divider()
                 bottomBar
             }
@@ -865,9 +871,10 @@ struct LiveCallView: View {
             isListening: manager.state == .live && !manager.aiSpeaking,
             onTap: { }
         )
-        .frame(height: 220)
-        .background(Color(red: 0.04, green: 0.05, blue: 0.13).cornerRadius(20))
-        .padding(.bottom, 4)
+        .frame(height: 200)
+        .frame(maxWidth: .infinity)
+        .background(Color(red: 0.04, green: 0.05, blue: 0.13))
+        .clipped()
     }
 
     @ViewBuilder
