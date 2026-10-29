@@ -6,14 +6,12 @@ workflows:
       xcode: 16.4
       cocoapods: default
     scripts:
-      - name: Check files
+      - name: Check required source files
         script: |
-          echo "=== Root files ==="
-          ls -la
-          echo "=== ChatAI folder ==="
-          ls -la ChatAI/
-          echo "=== project.yml ==="
-          cat project.yml
+          set -e
+          test -s project.yml
+          test -s IMG_0290.png
+          echo "Required project and icon files are present."
 
       - name: Install XcodeGen
         script: brew install xcodegen
@@ -29,27 +27,16 @@ workflows:
           sips -z 87 87   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-29@3x.png"
           sips -z 80 80   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@2x.png"
           sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@3x.png"
+          sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@3x.png"
           sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@2x.png"
           sips -z 180 180 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@3x.png"
-      - name: Copy companion images to Assets
-        run: |
-          for expr in neutral happy surprised thinking angry wink speaking sleepy; do
-            DEST="ChatAI/Assets.xcassets/companion_${expr}.imageset"
-            mkdir -p "$DEST"
-            cp "ChatAI/companion_${expr}.jpg" "$DEST/companion_${expr}.jpg"
-            cat > "$DEST/Contents.json" << JSON
-          {
-            "images": [{"filename": "companion_${expr}.jpg", "idiom": "universal", "scale": "1x"}],
-            "info": {"author": "xcode", "version": 1}
-          }
-          JSON
-          done
 
       - name: Generate Xcode project
         script: xcodegen generate
 
       - name: Build app (unsigned)
         script: |
+          set -o pipefail
           xcodebuild \
             -project ChatAI.xcodeproj \
             -scheme ChatAI \
@@ -61,10 +48,52 @@ workflows:
             build 2>&1 | tee build_output.txt
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "=== BUILD ERRORS ==="
-            grep -A 5 "error:" build_output.txt || cat build_output.txt | tail -100
+            grep -A 5 "error:" build_output.txt || tail -100 build_output.txt
             exit 1
           fi
 
+      - name: Copy and verify 8 transparent expression PNGs
+        script: |
+          set -eu
+          APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
+          SOURCE_DIR="Reference/FaceExpressions"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: Built app not found: $APP_PATH"
+            exit 1
+          fi
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "ERROR: Image source folder not found: $SOURCE_DIR"
+            exit 1
+          fi
+
+          images=(
+            companion_angry.png
+            companion_happy.png
+            companion_neutral.png
+            companion_sleepy.png
+            companion_speaking.png
+            companion_surprised.png
+            companion_thinking.png
+            companion_wink.png
+          )
+
+          echo "=== Copy transparent PNGs into ChatAI.app ==="
+          mkdir -p "$APP_PATH/FaceExpressions"
+          for image in "${images[@]}"; do
+            if [ ! -s "$SOURCE_DIR/$image" ]; then
+              echo "ERROR: Source PNG missing or empty: $SOURCE_DIR/$image"
+              exit 1
+            fi
+            cp "$SOURCE_DIR/$image" "$APP_PATH/FaceExpressions/$image"
+            if [ -s "$APP_PATH/FaceExpressions/$image" ]; then
+              echo "OK: $image"
+            else
+              echo "ERROR: Failed to bundle $image"
+              exit 1
+            fi
+          done
+          echo "SUCCESS: All 8 transparent PNGs are bundled."
+          
       - name: Package IPA
         script: |
           APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
@@ -73,6 +102,7 @@ workflows:
             ls -la build/Build/Products/Release-iphoneos/ || echo "Products folder not found"
             exit 1
           fi
+
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -r "chat-ai-tpios-$BUILD_NUMBER.ipa" Payload
