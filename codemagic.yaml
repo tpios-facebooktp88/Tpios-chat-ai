@@ -56,7 +56,7 @@ workflows:
         script: |
           set -eu
           APP_PATH="build/Build/Products/Release-iphoneos/ChatAI.app"
-          SOURCE_DIR="Reference/FaceExpressions"
+          SOURCE_DIR="ChatAI"
           if [ ! -d "$APP_PATH" ]; then
             echo "ERROR: Built app not found: $APP_PATH"
             exit 1
@@ -78,14 +78,15 @@ workflows:
           )
 
           echo "=== Copy transparent PNGs into ChatAI.app ==="
-          mkdir -p "$APP_PATH/FaceExpressions"
+          mkdir -p "$APP_PATH/ChatAI"
+
           for image in "${images[@]}"; do
             if [ ! -s "$SOURCE_DIR/$image" ]; then
               echo "ERROR: Source PNG missing or empty: $SOURCE_DIR/$image"
               exit 1
             fi
-            cp "$SOURCE_DIR/$image" "$APP_PATH/FaceExpressions/$image"
-            if [ -s "$APP_PATH/FaceExpressions/$image" ]; then
+            cp "$SOURCE_DIR/$image" "$APP_PATH/ChatAI/$image"
+            if [ -s "$APP_PATH/ChatAI/$image" ]; then
               echo "OK: $image"
             else
               echo "ERROR: Failed to bundle $image"
