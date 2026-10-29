@@ -31,6 +31,19 @@ workflows:
           sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@3x.png"
           sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@2x.png"
           sips -z 180 180 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@3x.png"
+      - name: Copy companion images to Assets
+        run: |
+          for expr in neutral happy surprised thinking angry wink speaking sleepy; do
+            DEST="ChatAI/Assets.xcassets/companion_${expr}.imageset"
+            mkdir -p "$DEST"
+            cp "ChatAI/companion_${expr}.jpg" "$DEST/companion_${expr}.jpg"
+            cat > "$DEST/Contents.json" << JSON
+          {
+            "images": [{"filename": "companion_${expr}.jpg", "idiom": "universal", "scale": "1x"}],
+            "info": {"author": "xcode", "version": 1}
+          }
+          JSON
+          done
 
       - name: Generate Xcode project
         script: xcodegen generate
