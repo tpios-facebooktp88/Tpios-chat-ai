@@ -770,10 +770,12 @@ struct LiveCallButton: View {
             showSheet = true
         } label: {
             Image(systemName: manager.state == .idle ? "waveform.circle" : "waveform.circle.fill")
-                .font(.title3)
-                .foregroundColor(manager.state == .idle ? .accentColor : .red)
+                .font(.system(size: 22))
+                .foregroundColor(manager.state == .idle ? Color(red:1,green:0.34,blue:0.13) : .red)
+                .frame(width: 40, height: 40)
+                .background(Color(red:0.18,green:0.10,blue:0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-        .padding(.trailing, 10)
         .sheet(isPresented: $showSheet, onDismiss: { finishCall() }) {
             LiveCallView(manager: manager)
         }
@@ -813,37 +815,63 @@ struct LiveCallView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Robot cố định phía trên, không bị scroll đẩy lên
-                robotFaceSection
+            ZStack {
+                Color(red: 0.06, green: 0.05, blue: 0.04).ignoresSafeArea()
 
-                Divider()
+                VStack(spacing: 0) {
+                    // ── Ảnh nhân vật cố định ──────────────────────────
+                    robotFaceSection
 
-                // Chỉ phần chat + options scroll
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            transcriptContent
-                            optionsGroup
-                            diagnosticsGroup
+                    // ── Chat transcript scroll ─────────────────────────
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if manager.lines.isEmpty {
+                                    Text("Bấm Bắt đầu gọi rồi cứ nói tự nhiên.\nMuốn đổi giọng, vai diễn hay tốc độ thì nói thẳng với AI.")
+                                        .font(.footnote)
+                                        .foregroundColor(Color(white: 0.50))
+                                        .multilineTextAlignment(.center)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.top, 20)
+                                }
+                                ForEach(manager.lines) { line in
+                                    LiveLineRow(line: line).id(line.id)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
                         }
-                        .padding()
-                    }
-                    .onChange(of: manager.lines.count) { _ in
-                        if let last = manager.lines.last {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        .onChange(of: manager.lines.count) { _ in
+                            if let last = manager.lines.last {
+                                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                            }
                         }
                     }
+
+                    // ── Options & diagnostics ──────────────────────────
+                    VStack(spacing: 0) {
+                        Divider().background(Color(white:0.18))
+                        optionsGroup
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 4)
+                        diagnosticsGroup
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 4)
+                    }
+
+                    // ── Bottom bar ─────────────────────────────────────
+                    Divider().background(Color(white:0.18))
+                    bottomBar
                 }
-
-                Divider()
-                bottomBar
             }
-            .navigationTitle("Gọi thoại Gemini")
+            .navigationTitle("AI Voice")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color(red:0.06,green:0.05,blue:0.04), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Xong") { dismiss() }
+                        .foregroundColor(Color(red:1,green:0.34,blue:0.13))
                 }
             }
             .sheet(isPresented: $showModelPicker) {
@@ -857,24 +885,41 @@ struct LiveCallView: View {
                 )
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
     private var robotFaceSection: some View {
-        RobotFaceView(
-            expression: manager.faceExpression,
-            speakingLevel: { date in
-                guard manager.aiSpeaking else { return 0 }
-                let t = date.timeIntervalSinceReferenceDate
-                return CGFloat(abs(sin(t * 9.0)) * (0.5 + 0.5 * abs(sin(t * 2.3))))
-            },
-            isListening: manager.state == .live && !manager.aiSpeaking,
-            onTap: { }
-        )
-        .frame(height: 200)
-        .frame(maxWidth: .infinity)
-        .background(Color(red: 0.04, green: 0.05, blue: 0.13))
-        .clipped()
+        ZStack(alignment: .bottom) {
+            RobotFaceView(
+                expression: manager.faceExpression,
+                speakingLevel: { date in
+                    guard manager.aiSpeaking else { return 0 }
+                    let t = date.timeIntervalSinceReferenceDate
+                    return CGFloat(abs(sin(t * 9.0)) * (0.5 + 0.5 * abs(sin(t * 2.3))))
+                },
+                isListening: manager.state == .live && !manager.aiSpeaking,
+                onTap: { }
+            )
+            .frame(height: 260)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            // Gradient mờ dần xuống dưới
+            LinearGradient(
+                colors: [.clear, Color(red:0.06,green:0.05,blue:0.04)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 80)
+            // Status badge
+            Text(statusText)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Color(white: 0.75))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.45))
+                .clipShape(Capsule())
+                .padding(.bottom, 10)
+        }
     }
 
     @ViewBuilder
@@ -904,56 +949,64 @@ struct LiveCallView: View {
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 10) {
-            Text(statusText)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            if manager.state != .idle {
-                Text(liveCounters)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
+        VStack(spacing: 8) {
+            // Error
             if let message = manager.errorText {
                 HStack(alignment: .top) {
                     Text(message)
-                        .font(.footnote)
-                        .foregroundColor(.red)
-                        .textSelection(.enabled)
+                        .font(.footnote).foregroundColor(.red).textSelection(.enabled)
                     Spacer()
-                    Button {
-                        UIPasteboard.general.string = message
-                    } label: {
+                    Button { UIPasteboard.general.string = message } label: {
                         Image(systemName: "doc.on.doc").foregroundColor(.red)
                     }
                 }
+                .padding(.horizontal, 14)
             }
 
-            Button {
-                if manager.state == .idle {
-                    manager.start(model: model, voice: voice, persona: persona, bargeIn: bargeIn)
-                } else {
-                    manager.end()
+            HStack(spacing: 12) {
+                // Xóa (chỉ hiện khi idle và có lines)
+                if manager.state == .idle && !manager.lines.isEmpty {
+                    Button {
+                        manager.clearLines()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 18))
+                            .foregroundColor(Color(white:0.55))
+                            .frame(width: 48, height: 48)
+                            .background(Color(red:0.15,green:0.12,blue:0.10))
+                            .clipShape(Circle())
+                    }
                 }
-            } label: {
-                Text(manager.state == .idle ? "Bắt đầu gọi" : "Kết thúc")
-                    .font(.headline)
+
+                // Nút gọi chính
+                Button {
+                    if manager.state == .idle {
+                        manager.start(model: model, voice: voice, persona: persona, bargeIn: bargeIn)
+                    } else {
+                        manager.end()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: manager.state == .idle ? "phone.fill" : "phone.down.fill")
+                        Text(manager.state == .idle ? "Bắt đầu gọi" : "Kết thúc cuộc gọi")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(manager.state == .idle ? Color.green : Color.red)
+                    .padding(.vertical, 14)
+                    .background(
+                        manager.state == .idle
+                            ? Color(red:1,green:0.34,blue:0.13)
+                            : Color(red:0.85,green:0.15,blue:0.15)
+                    )
                     .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-
-            if manager.state == .idle && !manager.lines.isEmpty {
-                Button("Xóa nội dung trên màn hình để bắt đầu mới") {
-                    manager.clearLines()
+                    .cornerRadius(14)
                 }
-                .font(.footnote)
             }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
         }
-        .padding()
+        .padding(.top, 10)
+        .background(Color(red:0.06,green:0.05,blue:0.04))
     }
 
     private var optionsGroup: some View {
@@ -1025,14 +1078,30 @@ struct LiveLineRow: View {
     let line: LiveVoiceManager.Line
 
     var body: some View {
-        HStack {
-            if line.role == .user { Spacer(minLength: 40) }
+        HStack(alignment: .bottom, spacing: 8) {
+            if line.role == .user { Spacer(minLength: 50) }
+
+            if line.role == .assistant {
+                Image("companion_neutral")
+                    .resizable().scaledToFill()
+                    .frame(width: 26, height: 26)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color(red:1,green:0.34,blue:0.13).opacity(0.7), lineWidth: 1))
+            }
+
             Text(line.text)
-                .padding(10)
-                .background(line.role == .user ? Color.blue.opacity(0.85) : Color(.secondarySystemBackground))
-                .foregroundColor(line.role == .user ? .white : .primary)
-                .cornerRadius(12)
-            if line.role == .assistant { Spacer(minLength: 40) }
+                .font(.system(size: 15))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    line.role == .user
+                        ? Color(red:1,green:0.34,blue:0.13)
+                        : Color(red:0.16,green:0.12,blue:0.10)
+                )
+                .cornerRadius(16)
+
+            if line.role == .user { Spacer(minLength: 50) }
         }
     }
 }
