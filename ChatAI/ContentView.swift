@@ -20,6 +20,7 @@ enum AppTheme {
 // MARK: - Root (4 tabs)
 
 struct ContentView: View {
+    @EnvironmentObject var theme: ThemeManager
     @StateObject private var viewModel    = ChatViewModel()
     @StateObject private var voiceManager = VoiceManager()
     @StateObject private var historyMgr   = HistoryManager.shared
@@ -28,7 +29,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            AppTheme.bg.ignoresSafeArea()
+            theme.bg.ignoresSafeArea()
 
             // Content
             Group {
@@ -69,6 +70,7 @@ struct AppTabBar: View {
         ("gearshape.fill",   "Cài đặt")
     ]
 
+    @EnvironmentObject var theme: ThemeManager
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<4) { i in
@@ -81,15 +83,15 @@ struct AppTabBar: View {
                         Text(items[i].label)
                             .font(.system(size: 10, weight: .medium))
                     }
-                    .foregroundColor(selectedTab == i ? AppTheme.accent : AppTheme.textSec)
+                    .foregroundColor(selectedTab == i ? theme.accent : theme.textSec)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                 }
             }
         }
         .background(
-            AppTheme.surface
-                .overlay(AppTheme.divider.frame(height: 0.5), alignment: .top)
+            theme.surface
+                .overlay(theme.divider.frame(height: 0.5), alignment: .top)
         )
         .frame(height: 64)
     }
