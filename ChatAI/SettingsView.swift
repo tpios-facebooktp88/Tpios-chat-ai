@@ -551,13 +551,15 @@ struct ThemeSettingsView: View {
     }
 
     private func wallSlider(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, scale: Int) -> some View {
-        HStack {
-            Text(label).font(.system(size: 14)).foregroundColor(theme.textPri)
-            Spacer()
-            Text("\(Int(value.wrappedValue * Double(scale)))%").font(.system(size: 13)).foregroundColor(theme.textSec)
+        VStack(spacing: 4) {
+            HStack {
+                Text(label).font(.system(size: 14)).foregroundColor(theme.textPri)
+                Spacer()
+                Text("\(Int(value.wrappedValue * Double(scale)))%").font(.system(size: 13)).foregroundColor(theme.textSec)
+            }
+            Slider(value: value, in: range).tint(theme.accent)
         }
-        Slider(value: value, in: range).tint(theme.accent)
-            .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 }
 
