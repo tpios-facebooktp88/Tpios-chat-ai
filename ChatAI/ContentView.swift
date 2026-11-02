@@ -100,6 +100,7 @@ struct AppTabBar: View {
 // MARK: - Chat Tab
 
 struct ChatTabView: View {
+    @EnvironmentObject var theme: ThemeManager
     @ObservedObject var viewModel: ChatViewModel
     @ObservedObject var voiceManager: VoiceManager
 
@@ -111,16 +112,27 @@ struct ChatTabView: View {
     @State private var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            theme.bg.ignoresSafeArea()
+            if let wall = ThemeManager.shared.loadWall() {
+                Image(uiImage: wall)
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+                    .saturation(ThemeManager.shared.wallSat)
+                    .brightness(ThemeManager.shared.wallBri - 1.0)
+                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+            }
+            VStack(spacing: 0) {
             chatHeader
-            Divider().background(AppTheme.divider)
+            Divider().background(theme.divider)
             messageList
             if let err = viewModel.errorMessage { errorBanner(err) }
             if let ve  = voiceManager.voiceErrorMessage { voiceErrorBanner(ve) }
             if voiceManager.isSpeaking { stopSpeakingBar }
             inputBar
         }
-        .background(AppTheme.bg)
+        } // end ZStack wallpaper
         .confirmationDialog("Chọn AI", isPresented: $showProviderMenu, titleVisibility: .visible) {
             ForEach(AIProviderKind.allCases) { p in
                 Button(p.rawValue) { viewModel.selectedProviderRaw = p.rawValue }
@@ -158,12 +170,12 @@ struct ChatTabView: View {
                 .scaledToFill()
                 .frame(width: 36, height: 36)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(AppTheme.accent, lineWidth: 1.5))
+                .overlay(Circle().stroke(theme.accent, lineWidth: 1.5))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("ChatAI")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(AppTheme.textPri)
+                    .foregroundColor(theme.textPri)
                 Button {
                     showProviderMenu = true
                 } label: {
@@ -172,10 +184,10 @@ struct ChatTabView: View {
                             .components(separatedBy: "(").first?
                             .trimmingCharacters(in: .whitespaces) ?? "")
                             .font(.system(size: 11))
-                            .foregroundColor(AppTheme.accent)
+                            .foregroundColor(theme.accent)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9))
-                            .foregroundColor(AppTheme.accent)
+                            .foregroundColor(theme.accent)
                     }
                 }
             }
@@ -184,11 +196,11 @@ struct ChatTabView: View {
 
             // Live call button
             LiveCallButton(viewModel: viewModel)
-                .foregroundColor(AppTheme.textSec)
+                .foregroundColor(theme.textSec)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(AppTheme.bg)
+        .background(theme.bg)
     }
 
     // ── Message list ──────────────────────────────────────────────────────────
@@ -211,7 +223,7 @@ struct ChatTabView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 8)
             }
-            .background(AppTheme.bg)
+            .background(theme.bg)
             .onChange(of: viewModel.messages) { _ in
                 if let last = viewModel.messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -242,7 +254,7 @@ struct ChatTabView: View {
     private var stopSpeakingBar: some View {
         Button { voiceManager.stopSpeaking() } label: {
             Label("Dừng đọc", systemImage: "stop.circle.fill")
-                .font(.footnote).foregroundColor(AppTheme.accent)
+                .font(.footnote).foregroundColor(theme.accent)
         }
         .padding(.horizontal, 16).padding(.vertical, 4)
     }
@@ -266,9 +278,9 @@ struct ChatTabView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 10))
                                 } else {
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(AppTheme.surface)
+                                        .fill(theme.surface)
                                         .frame(width: 56, height: 56)
-                                        .overlay(Image(systemName: "doc.fill").foregroundColor(AppTheme.textSec))
+                                        .overlay(Image(systemName: "doc.fill").foregroundColor(theme.textSec))
                                 }
                                 Button {
                                     pendingAttachments.removeAll { $0.id == att.id }
@@ -284,7 +296,7 @@ struct ChatTabView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
                 }
-                Divider().background(AppTheme.divider)
+                Divider().background(theme.divider)
             }
 
             // Row
@@ -310,7 +322,7 @@ struct ChatTabView: View {
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(pendingAttachments.count >= maxAtt ? AppTheme.textSec : AppTheme.accent)
+                            .foregroundColor(pendingAttachments.count >= maxAtt ? theme.textSec : theme.accent)
                     }
                     .disabled(pendingAttachments.count >= maxAtt)
                 }
@@ -320,9 +332,9 @@ struct ChatTabView: View {
                     .lineLimit(1...5)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
-                    .background(AppTheme.inputBg)
+                    .background(theme.surface)
                     .cornerRadius(20)
-                    .foregroundColor(AppTheme.textPri)
+                    .foregroundColor(theme.textPri)
                     .font(.system(size: 15))
 
                 // Mic / Send
@@ -350,9 +362,9 @@ struct ChatTabView: View {
                     } label: {
                         Image(systemName: voiceManager.isListening ? "mic.fill" : "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(voiceManager.isListening ? .red : AppTheme.textSec)
+                            .foregroundColor(voiceManager.isListening ? .red : theme.textSec)
                             .frame(width: 40, height: 40)
-                            .background(AppTheme.surface)
+                            .background(theme.surface)
                             .clipShape(Circle())
                     }
                 } else {
@@ -365,7 +377,7 @@ struct ChatTabView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 38, height: 38)
-                            .background(AppTheme.accent)
+                            .background(theme.accent)
                             .clipShape(Circle())
                     }
                     .disabled(viewModel.isSending)
@@ -373,7 +385,7 @@ struct ChatTabView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(AppTheme.bg)
+            .background(theme.bg)
         }
     }
 }
@@ -381,6 +393,7 @@ struct ChatTabView: View {
 // MARK: - Chat Bubble
 
 struct ChatBubble: View {
+    @EnvironmentObject var theme: ThemeManager
     let message: ChatMessage
     @State private var copied = false
 
@@ -396,7 +409,7 @@ struct ChatBubble: View {
                     .resizable().scaledToFill()
                     .frame(width: 28, height: 28)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.6), lineWidth: 1))
+                    .overlay(Circle().stroke(theme.accent.opacity(0.6), lineWidth: 1))
                     .alignmentGuide(.bottom) { d in d[.bottom] }
             }
 
@@ -413,13 +426,13 @@ struct ChatBubble: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                 } else {
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppTheme.surface)
+                                        .fill(theme.surface)
                                         .frame(width: 80, height: 80)
                                         .overlay(
                                             VStack(spacing: 4) {
                                                 Image(systemName: "doc.fill").font(.title2)
                                                 Text(att.fileName).font(.caption2).lineLimit(2)
-                                            }.foregroundColor(AppTheme.textSec)
+                                            }.foregroundColor(theme.textSec)
                                         )
                                 }
                             }
@@ -431,10 +444,10 @@ struct ChatBubble: View {
                 if !message.content.isEmpty && message.content != "(đính kèm)" {
                     Text(message.content)
                         .font(.system(size: 15))
-                        .foregroundColor(isUser ? .white : AppTheme.textPri)
+                        .foregroundColor(isUser ? .white : theme.textPri)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(isUser ? AppTheme.userBubble : AppTheme.aiBubble)
+                        .background(isUser ? theme.userBubble : theme.aiBubble)
                         .cornerRadius(isUser ? 18 : 18, antialiased: true)
                         .cornerRadius(isUser ? 4 : 18, antialiased: true)
                 }
@@ -447,7 +460,7 @@ struct ChatBubble: View {
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .font(.caption2)
-                        .foregroundColor(AppTheme.textSec.opacity(0.6))
+                        .foregroundColor(theme.textSec.opacity(0.6))
                 }
             }
 
@@ -461,6 +474,7 @@ struct ChatBubble: View {
 // MARK: - Typing indicator
 
 struct TypingIndicator: View {
+    @EnvironmentObject var theme: ThemeManager
     @State private var phase: Int = 0
     let timer = Timer.publish(every: 0.35, on: .main, in: .common).autoconnect()
 
@@ -468,7 +482,7 @@ struct TypingIndicator: View {
         HStack(spacing: 4) {
             ForEach(0..<3) { i in
                 Circle()
-                    .fill(phase == i ? AppTheme.accent : AppTheme.textSec)
+                    .fill(phase == i ? theme.accent : theme.textSec)
                     .frame(width: 7, height: 7)
                     .scaleEffect(phase == i ? 1.2 : 0.85)
                     .animation(.easeInOut(duration: 0.3), value: phase)
@@ -476,7 +490,7 @@ struct TypingIndicator: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(AppTheme.aiBubble)
+        .background(theme.aiBubble)
         .cornerRadius(14)
         .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
@@ -485,40 +499,49 @@ struct TypingIndicator: View {
 // MARK: - History Tab
 
 struct HistoryTabView: View {
+    @EnvironmentObject var theme: ThemeManager
     @ObservedObject var viewModel: ChatViewModel
     @StateObject private var historyMgr = HistoryManager.shared
     @State private var renameSession: ChatSession?
     @State private var newTitle = ""
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            theme.bg.ignoresSafeArea()
+            if let wall = ThemeManager.shared.loadWall() {
+                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
+                    .saturation(ThemeManager.shared.wallSat)
+                    .brightness(ThemeManager.shared.wallBri - 1.0)
+                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+            }
+            VStack(spacing: 0) {
             // Header
             HStack {
                 Text("Lịch sử chat")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(AppTheme.textPri)
+                    .foregroundColor(theme.textPri)
                 Spacer()
                 Button {
                     viewModel.startNewChat()
                 } label: {
                     Image(systemName: "square.and.pencil")
-                        .foregroundColor(AppTheme.accent)
+                        .foregroundColor(theme.accent)
                         .font(.system(size: 18))
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
-            Divider().background(AppTheme.divider)
+            Divider().background(theme.divider)
 
             if historyMgr.sessions.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
                     Image(systemName: "clock")
                         .font(.system(size: 40))
-                        .foregroundColor(AppTheme.textSec)
+                        .foregroundColor(theme.textSec)
                     Text("Chưa có lịch sử chat")
-                        .foregroundColor(AppTheme.textSec)
+                        .foregroundColor(theme.textSec)
                 }
                 Spacer()
             } else {
@@ -532,16 +555,16 @@ struct HistoryTabView: View {
                                     .resizable().scaledToFill()
                                     .frame(width: 40, height: 40)
                                     .clipShape(Circle())
-                                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.5), lineWidth: 1))
+                                    .overlay(Circle().stroke(theme.accent.opacity(0.5), lineWidth: 1))
 
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(session.title)
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(AppTheme.textPri)
+                                        .foregroundColor(theme.textPri)
                                         .lineLimit(1)
                                     Text(session.preview)
                                         .font(.system(size: 12))
-                                        .foregroundColor(AppTheme.textSec)
+                                        .foregroundColor(theme.textSec)
                                         .lineLimit(2)
                                 }
 
@@ -549,12 +572,12 @@ struct HistoryTabView: View {
 
                                 Text(session.updatedAt, style: .relative)
                                     .font(.system(size: 11))
-                                    .foregroundColor(AppTheme.textSec)
+                                    .foregroundColor(theme.textSec)
                             }
                             .padding(.vertical, 4)
                         }
-                        .listRowBackground(AppTheme.surface)
-                        .listRowSeparatorTint(AppTheme.divider)
+                        .listRowBackground(theme.surface)
+                        .listRowSeparatorTint(theme.divider)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 historyMgr.delete(session: session)
@@ -570,11 +593,11 @@ struct HistoryTabView: View {
                     }
                 }
                 .listStyle(.plain)
-                .background(AppTheme.bg)
+                .background(theme.bg)
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(AppTheme.bg)
+        } // end ZStack
         .alert("Đổi tên", isPresented: .init(get: { renameSession != nil }, set: { if !$0 { renameSession = nil } })) {
             TextField("Tên mới", text: $newTitle)
             Button("Lưu") {
@@ -590,41 +613,50 @@ struct HistoryTabView: View {
 // MARK: - Memory Tab
 
 struct MemoryTabView: View {
+    @EnvironmentObject var theme: ThemeManager
     @StateObject private var historyMgr = HistoryManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            theme.bg.ignoresSafeArea()
+            if let wall = ThemeManager.shared.loadWall() {
+                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
+                    .saturation(ThemeManager.shared.wallSat)
+                    .brightness(ThemeManager.shared.wallBri - 1.0)
+                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+            }
+            VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AI Memory")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(AppTheme.textPri)
+                        .foregroundColor(theme.textPri)
                     Text("Những điều quan trọng mình luôn nhớ về bạn")
                         .font(.system(size: 12))
-                        .foregroundColor(AppTheme.textSec)
+                        .foregroundColor(theme.textSec)
                 }
                 Spacer()
                 Text("\(historyMgr.memories.count)/50")
                     .font(.system(size: 12))
-                    .foregroundColor(AppTheme.textSec)
+                    .foregroundColor(theme.textSec)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
-            Divider().background(AppTheme.divider)
+            Divider().background(theme.divider)
 
             if historyMgr.memories.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
                     Image(systemName: "brain")
                         .font(.system(size: 40))
-                        .foregroundColor(AppTheme.textSec)
+                        .foregroundColor(theme.textSec)
                     Text("Chưa có thông tin nào được ghi nhớ")
-                        .foregroundColor(AppTheme.textSec)
+                        .foregroundColor(theme.textSec)
                         .multilineTextAlignment(.center)
                     Text("AI sẽ tự động ghi nhớ thông tin quan trọng\ntrong lúc chat")
                         .font(.caption)
-                        .foregroundColor(AppTheme.textSec.opacity(0.7))
+                        .foregroundColor(theme.textSec.opacity(0.7))
                         .multilineTextAlignment(.center)
                 }
                 Spacer()
@@ -633,7 +665,7 @@ struct MemoryTabView: View {
                     ForEach(historyMgr.memories) { item in
                         HStack(spacing: 12) {
                             Circle()
-                                .fill(AppTheme.accent)
+                                .fill(theme.accent)
                                 .frame(width: 8, height: 8)
                                 .padding(.top, 4)
                                 .alignmentGuide(.top) { d in d[.top] }
@@ -641,15 +673,15 @@ struct MemoryTabView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.content)
                                     .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.textPri)
+                                    .foregroundColor(theme.textPri)
                                 Text(item.savedAt, style: .date)
                                     .font(.system(size: 11))
-                                    .foregroundColor(AppTheme.textSec)
+                                    .foregroundColor(theme.textSec)
                             }
                         }
                         .padding(.vertical, 4)
-                        .listRowBackground(AppTheme.surface)
-                        .listRowSeparatorTint(AppTheme.divider)
+                        .listRowBackground(theme.surface)
+                        .listRowSeparatorTint(theme.divider)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 historyMgr.deleteMemory(item)
@@ -670,13 +702,14 @@ struct MemoryTabView: View {
                 }
             }
         }
-        .background(AppTheme.bg)
+        } // end ZStack
     }
 }
 
 // MARK: - Settings Tab
 
 struct HistoryView: View {
+    @EnvironmentObject var theme: ThemeManager
     @ObservedObject var viewModel: ChatViewModel
     @StateObject private var historyMgr = HistoryManager.shared
     @Environment(\.dismiss) private var dismiss
