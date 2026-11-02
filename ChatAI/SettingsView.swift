@@ -17,6 +17,12 @@ struct SettingsTabView: View {
         NavigationStack {
             ZStack {
                 theme.bg.ignoresSafeArea()
+                if let wall = ThemeManager.shared.loadWall() {
+                    Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
+                        .saturation(ThemeManager.shared.wallSat)
+                        .brightness(ThemeManager.shared.wallBri - 1.0)
+                        .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+                }
                 List {
                     // ── Header ────────────────────────────────────────
                     Section {
@@ -133,6 +139,12 @@ struct VoiceRoleSettingsView: View {
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
+            if let wall = ThemeManager.shared.loadWall() {
+                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
+                    .saturation(ThemeManager.shared.wallSat)
+                    .brightness(ThemeManager.shared.wallBri - 1.0)
+                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+            }
             Form {
                 // ── TTS thông thường ──────────────────────────────
                 Section {
@@ -227,6 +239,12 @@ struct ModelAISettingsView: View {
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
+            if let wall = ThemeManager.shared.loadWall() {
+                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
+                    .saturation(ThemeManager.shared.wallSat)
+                    .brightness(ThemeManager.shared.wallBri - 1.0)
+                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+            }
             Form {
                 Section {
                     ForEach(providers, id: \.0) { (kind, name, desc) in
@@ -373,6 +391,12 @@ struct ThemeSettingsView: View {
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
+            if let wall = ThemeManager.shared.loadWall() {
+                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
+                    .saturation(ThemeManager.shared.wallSat)
+                    .brightness(ThemeManager.shared.wallBri - 1.0)
+                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
 
