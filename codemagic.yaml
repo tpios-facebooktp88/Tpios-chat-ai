@@ -62,7 +62,7 @@ workflows:
 
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-          zip -r "chat-ai-tpios-$BUILD_NUMBER.ipa" Payload
+          zip -r "chat-ai-claude-$BUILD_NUMBER.ipa" Payload
 
     artifacts:
-      - chat-ai-tpios-*.ipa
+      - chat-ai-claude-*.ipa
