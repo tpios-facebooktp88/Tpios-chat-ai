@@ -809,9 +809,6 @@ struct LiveCallView: View {
     @AppStorage("live_persona") private var persona: String = LivePersona.defaultText
     @AppStorage("live_barge_in") private var bargeIn: Bool = false
 
-    @State private var showOptions = false
-    @State private var showDiagnostics = false
-    @State private var showModelPicker = false
 
     var body: some View {
         NavigationStack {
@@ -819,49 +816,23 @@ struct LiveCallView: View {
                 Color(red: 0.06, green: 0.05, blue: 0.04).ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // ── Ảnh nhân vật cố định ──────────────────────────
+                    // ── Nhân vật: chiếm 55% chiều cao, chạm để bật/tắt ──
                     robotFaceSection
 
-                    // ── Chat transcript scroll ─────────────────────────
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 8) {
-                                if manager.lines.isEmpty {
-                                    Text("Bấm Bắt đầu gọi rồi cứ nói tự nhiên.\nMuốn đổi giọng, vai diễn hay tốc độ thì nói thẳng với AI.")
-                                        .font(.footnote)
-                                        .foregroundColor(Color(white: 0.50))
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.top, 20)
-                                }
-                                ForEach(manager.lines) { line in
-                                    LiveLineRow(line: line).id(line.id)
-                                }
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                        }
-                        .onChange(of: manager.lines.count) { _ in
-                            if let last = manager.lines.last {
-                                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    // ── Khung hội thoại cố định bên dưới nhân vật ─────
+                    transcriptBox
+
+                    // ── Error bar ──────────────────────────────────────
+                    if let message = manager.errorText {
+                        HStack {
+                            Text(message).font(.footnote).foregroundColor(.red).textSelection(.enabled)
+                            Spacer()
+                            Button { UIPasteboard.general.string = message } label: {
+                                Image(systemName: "doc.on.doc").foregroundColor(.red)
                             }
                         }
+                        .padding(.horizontal, 14).padding(.vertical, 6)
                     }
-
-                    // ── Options & diagnostics ──────────────────────────
-                    VStack(spacing: 0) {
-                        Divider().background(Color(white:0.18))
-                        optionsGroup
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 4)
-                        diagnosticsGroup
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 4)
-                    }
-
-                    // ── Bottom bar ─────────────────────────────────────
-                    Divider().background(Color(white:0.18))
-                    bottomBar
                 }
             }
             .navigationTitle("AI Voice")
@@ -874,51 +845,93 @@ struct LiveCallView: View {
                         .foregroundColor(Color(red:1,green:0.34,blue:0.13))
                 }
             }
-            .sheet(isPresented: $showModelPicker) {
-                ModelPickerView(
-                    title: "Model gọi thoại",
-                    currentModel: $model,
-                    fetch: {
-                        let key = KeychainHelper.read(forKey: AIProviderKind.gemini.keychainKey) ?? ""
-                        return try await GeminiLiveModels.fetch(apiKey: key)
-                    }
-                )
-            }
         }
         .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
     private var robotFaceSection: some View {
-        ZStack(alignment: .bottom) {
-            RobotFaceView(
-                expression: manager.faceExpression,
-                speakingLevel: { date in
-                    guard manager.aiSpeaking else { return 0 }
-                    let t = date.timeIntervalSinceReferenceDate
-                    return CGFloat(abs(sin(t * 9.0)) * (0.5 + 0.5 * abs(sin(t * 2.3))))
-                },
-                isListening: manager.state == .live && !manager.aiSpeaking,
-                onTap: { }
-            )
-            .frame(height: 260)
-            .frame(maxWidth: .infinity)
-            .clipped()
-            // Gradient mờ dần xuống dưới
-            LinearGradient(
-                colors: [.clear, Color(red:0.06,green:0.05,blue:0.04)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 80)
-            // Status badge
-            Text(statusText)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(Color(white: 0.75))
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                RobotFaceView(
+                    expression: manager.faceExpression,
+                    speakingLevel: { date in
+                        guard manager.aiSpeaking else { return 0 }
+                        let t = date.timeIntervalSinceReferenceDate
+                        return CGFloat(abs(sin(t * 9.0)) * (0.5 + 0.5 * abs(sin(t * 2.3))))
+                    },
+                    isListening: manager.state == .live && !manager.aiSpeaking,
+                    onTap: {
+                        // Chạm vào nhân vật = bật/tắt cuộc gọi
+                        if manager.state == .idle {
+                            manager.start(model: model, voice: voice, persona: persona, bargeIn: bargeIn)
+                        } else {
+                            manager.end()
+                        }
+                    }
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+
+                // Gradient mờ dần xuống
+                LinearGradient(
+                    colors: [.clear, Color(red:0.06,green:0.05,blue:0.04)],
+                    startPoint: UnitPoint(x: 0.5, y: 0.6), endPoint: .bottom
+                )
+                .frame(height: geo.size.height * 0.35)
+
+                // Status badge + gợi ý chạm
+                VStack(spacing: 6) {
+                    Text(statusText)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                        .background(Color.black.opacity(0.50))
+                        .clipShape(Capsule())
+
+                    if manager.state == .idle {
+                        Text(manager.lines.isEmpty ? "Chạm vào để bắt đầu" : "Chạm vào để gọi lại")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(white: 0.55))
+                    }
+                }
+                .padding(.bottom, 12)
+            }
+        }
+        .frame(height: UIScreen.main.bounds.height * 0.52)
+    }
+
+    @ViewBuilder
+    private var transcriptBox: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(manager.lines) { line in
+                        LiveLineRow(line: line).id(line.id)
+                    }
+                    if manager.lines.isEmpty {
+                        Text("Chạm vào nhân vật để bắt đầu cuộc trò chuyện")
+                            .font(.footnote)
+                            .foregroundColor(Color(white: 0.40))
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 8)
+                    }
+                }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background(Color.black.opacity(0.45))
-                .clipShape(Capsule())
-                .padding(.bottom, 10)
+                .padding(.vertical, 8)
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color(red:0.10,green:0.08,blue:0.07).opacity(0.85))
+            .cornerRadius(16)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
+            .onChange(of: manager.lines.count) { _ in
+                if let last = manager.lines.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
         }
     }
 
@@ -948,130 +961,6 @@ struct LiveCallView: View {
         return "Mic đã gửi \(stats.sent) gói, mức \(level)% | Google \(manager.serverMessages) tin, \(manager.audioChunksIn) gói tiếng"
     }
 
-    private var bottomBar: some View {
-        VStack(spacing: 8) {
-            // Error
-            if let message = manager.errorText {
-                HStack(alignment: .top) {
-                    Text(message)
-                        .font(.footnote).foregroundColor(.red).textSelection(.enabled)
-                    Spacer()
-                    Button { UIPasteboard.general.string = message } label: {
-                        Image(systemName: "doc.on.doc").foregroundColor(.red)
-                    }
-                }
-                .padding(.horizontal, 14)
-            }
-
-            HStack(spacing: 12) {
-                // Xóa (chỉ hiện khi idle và có lines)
-                if manager.state == .idle && !manager.lines.isEmpty {
-                    Button {
-                        manager.clearLines()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 18))
-                            .foregroundColor(Color(white:0.55))
-                            .frame(width: 48, height: 48)
-                            .background(Color(red:0.15,green:0.12,blue:0.10))
-                            .clipShape(Circle())
-                    }
-                }
-
-                // Nút gọi chính
-                Button {
-                    if manager.state == .idle {
-                        manager.start(model: model, voice: voice, persona: persona, bargeIn: bargeIn)
-                    } else {
-                        manager.end()
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: manager.state == .idle ? "phone.fill" : "phone.down.fill")
-                        Text(manager.state == .idle ? "Bắt đầu gọi" : "Kết thúc cuộc gọi")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        manager.state == .idle
-                            ? Color(red:1,green:0.34,blue:0.13)
-                            : Color(red:0.85,green:0.15,blue:0.15)
-                    )
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
-        }
-        .padding(.top, 10)
-        .background(Color(red:0.06,green:0.05,blue:0.04))
-    }
-
-    private var optionsGroup: some View {
-        DisclosureGroup("Tùy chỉnh giọng, vai diễn, model", isExpanded: $showOptions) {
-            optionsBody
-        }
-    }
-
-    private var optionsBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("Giọng", selection: $voice) {
-                ForEach(LiveVoices.all) { item in
-                    Text("\(item.id) - \(item.hint)").tag(item.id)
-                }
-            }
-
-            Menu("Chọn nhanh vai diễn") {
-                ForEach(LivePersona.presets) { preset in
-                    Button(preset.id) { persona = preset.text }
-                }
-            }
-
-            Text("Vai diễn và ngữ cảnh (AI làm theo ngay từ đầu cuộc gọi)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            TextEditor(text: $persona)
-                .frame(minHeight: 110)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.secondary.opacity(0.4))
-                )
-
-            HStack {
-                TextField("Tên model", text: $model)
-                    .textFieldStyle(.roundedBorder)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                Button("Danh sách") { showModelPicker = true }
-            }
-
-            Toggle("Cho phép ngắt lời (chế độ khử vọng, nên dùng tai nghe)", isOn: $bargeIn)
-
-            Text("Mặc định tắt: dùng mic của máy và tạm nghỉ mic lúc AI đang nói, ít lỗi nhất. Đổi giọng hoặc vai diễn ở đây áp dụng từ lần Bắt đầu gọi kế tiếp. Đổi giọng điệu trong lúc đang nói thì cứ nói thẳng với AI.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .disabled(manager.state != .idle)
-        .padding(.top, 8)
-    }
-
-    private var diagnosticsGroup: some View {
-        DisclosureGroup("Chẩn đoán kỹ thuật (gửi tôi khi có lỗi)", isExpanded: $showDiagnostics) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(manager.report)
-                    .font(.system(.caption2, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button("Copy báo cáo") {
-                    UIPasteboard.general.string = manager.report
-                }
-                .font(.footnote)
-            }
-            .padding(.top, 6)
-        }
-    }
 }
 
 struct LiveLineRow: View {
