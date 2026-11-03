@@ -29,9 +29,19 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            // ── Nền toàn app (render 1 lần, không bị reset bởi tab switch) ──
             theme.bg.ignoresSafeArea()
+            if let wall = theme.wallImage {
+                Image(uiImage: wall)
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+                    .saturation(theme.wallSat)
+                    .brightness(theme.wallBri - 1.0)
+                    .overlay(Color.black.opacity(theme.wallOvl))
+            }
 
-            // Content
+            // Content (các tab không cần tự quản lý ảnh nền nữa)
             Group {
                 switch selectedTab {
                 case 0: ChatTabView(viewModel: viewModel, voiceManager: voiceManager)
@@ -121,17 +131,6 @@ struct ChatTabView: View {
             if voiceManager.isSpeaking { stopSpeakingBar }
             inputBar
         }
-        .background(
-            ZStack {
-                theme.bg
-                if let wall = theme.wallImage {
-                    Image(uiImage: wall).resizable().scaledToFill()
-                        .saturation(theme.wallSat)
-                        .brightness(theme.wallBri - 1.0)
-                        .overlay(Color.black.opacity(theme.wallOvl))
-                }
-            }.ignoresSafeArea()
-        )
         .confirmationDialog("Chọn AI", isPresented: $showProviderMenu, titleVisibility: .visible) {
             ForEach(AIProviderKind.allCases) { p in
                 Button(p.rawValue) { viewModel.selectedProviderRaw = p.rawValue }
@@ -588,17 +587,6 @@ struct HistoryTabView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(
-            ZStack {
-                theme.bg
-                if let wall = theme.wallImage {
-                    Image(uiImage: wall).resizable().scaledToFill()
-                        .saturation(theme.wallSat)
-                        .brightness(theme.wallBri - 1.0)
-                        .overlay(Color.black.opacity(theme.wallOvl))
-                }
-            }.ignoresSafeArea()
-        )
         .alert("Đổi tên", isPresented: .init(get: { renameSession != nil }, set: { if !$0 { renameSession = nil } })) {
             TextField("Tên mới", text: $newTitle)
             Button("Lưu") {
@@ -695,17 +683,6 @@ struct MemoryTabView: View {
                 }
             }
         }
-        .background(
-            ZStack {
-                theme.bg
-                if let wall = theme.wallImage {
-                    Image(uiImage: wall).resizable().scaledToFill()
-                        .saturation(theme.wallSat)
-                        .brightness(theme.wallBri - 1.0)
-                        .overlay(Color.black.opacity(theme.wallOvl))
-                }
-            }.ignoresSafeArea()
-        )
     }
 }
 
