@@ -1,4 +1,4 @@
-name: ChatAI
+name: Chatai-claude
 options:
   bundleIdPrefix: com.tpios
 targets:
@@ -11,7 +11,7 @@ targets:
     info:
       path: ChatAI-Info.plist
       properties:
-        CFBundleDisplayName: "Chat AI"
+        CFBundleDisplayName: "Chat AI Claude"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
@@ -24,7 +24,7 @@ targets:
       - sdk: Speech.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tpios.chatai
+        PRODUCT_BUNDLE_IDENTIFIER: com.chatai.claude
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
