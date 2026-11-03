@@ -17,7 +17,7 @@ struct SettingsTabView: View {
         NavigationStack {
             ZStack {
                 theme.bg.ignoresSafeArea()
-                if let wall = ThemeManager.shared.loadWall() {
+                if let wall = theme.wallImage {
                     Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
                         .saturation(ThemeManager.shared.wallSat)
                         .brightness(ThemeManager.shared.wallBri - 1.0)
@@ -546,7 +546,7 @@ struct ThemeSettingsView: View {
         }
         .onAppear {
             pickerR = theme.accentR; pickerG = theme.accentG; pickerB = theme.accentB
-            wallImage = theme.loadWall()
+            wallImage = theme.wallImage
         }
     }
 
