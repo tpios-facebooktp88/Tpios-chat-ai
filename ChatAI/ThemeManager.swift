@@ -33,11 +33,13 @@ final class ThemeManager: ObservableObject {
     @Published var divider:    Color = Color(white:0.18)
 
     private init() {
-        rebuild()
-        // Load cached wallpaper from disk on startup
-        if hasWall {
-            wallImage = UIImage(contentsOfFile: wallURL.path)
+        // Load wallpaper synchronously BEFORE first publish so no flash
+        if UserDefaults.standard.bool(forKey: "has_wall") {
+            let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("chatai_wall.jpg")
+            _wallImage = Published(initialValue: UIImage(contentsOfFile: url.path))
         }
+        rebuild()
     }
 
     func rebuild() {
