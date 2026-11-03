@@ -5,6 +5,7 @@ import UIKit
 //  ThemeManager.swift
 // ─────────────────────────────────────────────────────────────────────────────
 
+@MainActor
 final class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
 
@@ -32,14 +33,33 @@ final class ThemeManager: ObservableObject {
     @Published var textSec:    Color = Color(white:0.60)
     @Published var divider:    Color = Color(white:0.18)
 
-    private init() {
-        // Load wallpaper synchronously BEFORE first publish so no flash
-        if UserDefaults.standard.bool(forKey: "has_wall") {
+    nonisolated init() {
+        // Load wallpaper synchronously before SwiftUI first render — no flash
+        let hasW = UserDefaults.standard.bool(forKey: "has_wall")
+        if hasW {
             let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("chatai_wall.jpg")
             _wallImage = Published(initialValue: UIImage(contentsOfFile: url.path))
+        } else {
+            _wallImage = Published(initialValue: nil)
         }
-        rebuild()
+        // Rebuild colors from stored AppStorage values
+        let r = UserDefaults.standard.double(forKey: "tm_ar").nonZero(1.0)
+        let g = UserDefaults.standard.double(forKey: "tm_ag").nonZero(0.34)
+        let b = UserDefaults.standard.double(forKey: "tm_ab").nonZero(0.13)
+        let bgr = UserDefaults.standard.double(forKey: "tm_bgr").nonZero(0.08)
+        let bgg = UserDefaults.standard.double(forKey: "tm_bgg").nonZero(0.06)
+        let bgb = UserDefaults.standard.double(forKey: "tm_bgb").nonZero(0.05)
+        let acc = Color(red: r, green: g, blue: b)
+        let bg_ = Color(red: bgr, green: bgg, blue: bgb)
+        _accent     = Published(initialValue: acc)
+        _bg         = Published(initialValue: bg_)
+        _surface    = Published(initialValue: Color(red: min(bgr+0.06,1), green: min(bgg+0.05,1), blue: min(bgb+0.04,1)))
+        _userBubble = Published(initialValue: acc)
+        _aiBubble   = Published(initialValue: Color(red: min(bgr+0.08,1), green: min(bgg+0.06,1), blue: min(bgb+0.05,1)))
+        _textPri    = Published(initialValue: .white)
+        _textSec    = Published(initialValue: Color(white: 0.60))
+        _divider    = Published(initialValue: Color(white: 0.18))
     }
 
     func rebuild() {
@@ -118,3 +138,7 @@ let accentPalette: [(Double,Double,Double)] = [
     (0.75,0.30,0.60),(0.88,0.35,0.45),(0.20,0.55,0.25),(0.40,0.60,0.20),
     (0.55,0.70,0.10),(0.10,0.70,0.55),(0.05,0.65,0.65),(0.95,0.95,0.95),
 ]
+
+extension Double {
+    func nonZero(_ fallback: Double) -> Double { self == 0 ? fallback : self }
+}
