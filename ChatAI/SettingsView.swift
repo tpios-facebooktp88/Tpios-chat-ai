@@ -139,11 +139,11 @@ struct VoiceRoleSettingsView: View {
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
-            if let wall = ThemeManager.shared.loadWall() {
+            if let wall = theme.wallImage {
                 Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
-                    .saturation(ThemeManager.shared.wallSat)
-                    .brightness(ThemeManager.shared.wallBri - 1.0)
-                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+                    .saturation(theme.wallSat)
+                    .brightness(theme.wallBri - 1.0)
+                    .overlay(Color.black.opacity(theme.wallOvl))
             }
             Form {
                 // ── TTS thông thường ──────────────────────────────
@@ -239,11 +239,11 @@ struct ModelAISettingsView: View {
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
-            if let wall = ThemeManager.shared.loadWall() {
+            if let wall = theme.wallImage {
                 Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
-                    .saturation(ThemeManager.shared.wallSat)
-                    .brightness(ThemeManager.shared.wallBri - 1.0)
-                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+                    .saturation(theme.wallSat)
+                    .brightness(theme.wallBri - 1.0)
+                    .overlay(Color.black.opacity(theme.wallOvl))
             }
             Form {
                 Section {
@@ -391,11 +391,11 @@ struct ThemeSettingsView: View {
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
-            if let wall = ThemeManager.shared.loadWall() {
+            if let wall = theme.wallImage {
                 Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
-                    .saturation(ThemeManager.shared.wallSat)
-                    .brightness(ThemeManager.shared.wallBri - 1.0)
-                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
+                    .saturation(theme.wallSat)
+                    .brightness(theme.wallBri - 1.0)
+                    .overlay(Color.black.opacity(theme.wallOvl))
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -502,7 +502,7 @@ struct ThemeSettingsView: View {
                         }
                         .padding(.horizontal)
 
-                        if let img = wallImage ?? theme.loadWall() {
+                        if let img = wallImage ?? theme.wallImage {
                             Image(uiImage: img)
                                 .resizable().scaledToFill()
                                 .frame(height: 120)
@@ -541,7 +541,7 @@ struct ThemeSettingsView: View {
         .sheet(isPresented: $showImagePicker) {
             ImagePickerView(sourceType: .photoLibrary) { img in
                 theme.saveWall(img)
-                wallImage = img
+                wallImage = img  // local preview
             }
         }
         .onAppear {
