@@ -112,18 +112,7 @@ struct ChatTabView: View {
     @State private var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
 
     var body: some View {
-        ZStack {
-            theme.bg.ignoresSafeArea()
-            if let wall = ThemeManager.shared.loadWall() {
-                Image(uiImage: wall)
-                    .resizable()
-                    .scaledToFill()
-                    .ignoresSafeArea()
-                    .saturation(ThemeManager.shared.wallSat)
-                    .brightness(ThemeManager.shared.wallBri - 1.0)
-                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
-            }
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
             chatHeader
             Divider().background(theme.divider)
             messageList
@@ -132,7 +121,17 @@ struct ChatTabView: View {
             if voiceManager.isSpeaking { stopSpeakingBar }
             inputBar
         }
-        } // end ZStack wallpaper
+        .background(
+            ZStack {
+                theme.bg
+                if let wall = theme.wallImage {
+                    Image(uiImage: wall).resizable().scaledToFill()
+                        .saturation(theme.wallSat)
+                        .brightness(theme.wallBri - 1.0)
+                        .overlay(Color.black.opacity(theme.wallOvl))
+                }
+            }.ignoresSafeArea()
+        )
         .confirmationDialog("Chọn AI", isPresented: $showProviderMenu, titleVisibility: .visible) {
             ForEach(AIProviderKind.allCases) { p in
                 Button(p.rawValue) { viewModel.selectedProviderRaw = p.rawValue }
@@ -506,15 +505,7 @@ struct HistoryTabView: View {
     @State private var newTitle = ""
 
     var body: some View {
-        ZStack {
-            theme.bg.ignoresSafeArea()
-            if let wall = ThemeManager.shared.loadWall() {
-                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
-                    .saturation(ThemeManager.shared.wallSat)
-                    .brightness(ThemeManager.shared.wallBri - 1.0)
-                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
-            }
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
             // Header
             HStack {
                 Text("Lịch sử chat")
@@ -597,7 +588,17 @@ struct HistoryTabView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        } // end ZStack
+        .background(
+            ZStack {
+                theme.bg
+                if let wall = theme.wallImage {
+                    Image(uiImage: wall).resizable().scaledToFill()
+                        .saturation(theme.wallSat)
+                        .brightness(theme.wallBri - 1.0)
+                        .overlay(Color.black.opacity(theme.wallOvl))
+                }
+            }.ignoresSafeArea()
+        )
         .alert("Đổi tên", isPresented: .init(get: { renameSession != nil }, set: { if !$0 { renameSession = nil } })) {
             TextField("Tên mới", text: $newTitle)
             Button("Lưu") {
@@ -617,15 +618,7 @@ struct MemoryTabView: View {
     @StateObject private var historyMgr = HistoryManager.shared
 
     var body: some View {
-        ZStack {
-            theme.bg.ignoresSafeArea()
-            if let wall = ThemeManager.shared.loadWall() {
-                Image(uiImage: wall).resizable().scaledToFill().ignoresSafeArea()
-                    .saturation(ThemeManager.shared.wallSat)
-                    .brightness(ThemeManager.shared.wallBri - 1.0)
-                    .overlay(Color.black.opacity(ThemeManager.shared.wallOvl))
-            }
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AI Memory")
@@ -702,7 +695,17 @@ struct MemoryTabView: View {
                 }
             }
         }
-        } // end ZStack
+        .background(
+            ZStack {
+                theme.bg
+                if let wall = theme.wallImage {
+                    Image(uiImage: wall).resizable().scaledToFill()
+                        .saturation(theme.wallSat)
+                        .brightness(theme.wallBri - 1.0)
+                        .overlay(Color.black.opacity(theme.wallOvl))
+                }
+            }.ignoresSafeArea()
+        )
     }
 }
 
