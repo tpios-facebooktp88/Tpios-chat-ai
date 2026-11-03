@@ -27,21 +27,22 @@ struct ContentView: View {
 
     @State private var selectedTab = 0
 
+    @ViewBuilder
+    private var wallpaperBackground: some View {
+        theme.bg
+        if let wall = theme.wallImage {
+            Image(uiImage: wall)
+                .resizable()
+                .scaledToFill()
+                .saturation(theme.wallSat)
+                .brightness(theme.wallBri - 1.0)
+                .overlay(Color.black.opacity(theme.wallOvl))
+                .id("wall")   // stable id — prevents SwiftUI from recreating on redraw
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Nền toàn app (render 1 lần, không bị reset bởi tab switch) ──
-            theme.bg.ignoresSafeArea()
-            if let wall = theme.wallImage {
-                Image(uiImage: wall)
-                    .resizable()
-                    .scaledToFill()
-                    .ignoresSafeArea()
-                    .saturation(theme.wallSat)
-                    .brightness(theme.wallBri - 1.0)
-                    .overlay(Color.black.opacity(theme.wallOvl))
-            }
-
-            // Content (các tab không cần tự quản lý ảnh nền nữa)
             Group {
                 switch selectedTab {
                 case 0: ChatTabView(viewModel: viewModel, voiceManager: voiceManager)
@@ -54,9 +55,9 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.bottom, 64)
 
-            // Bottom tab bar
             AppTabBar(selectedTab: $selectedTab)
         }
+        .background(wallpaperBackground.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onAppear {
             viewModel.onSpeakReply = { text, gender in
