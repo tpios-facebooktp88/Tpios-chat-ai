@@ -134,8 +134,12 @@ final class ChatViewModel: ObservableObject {
     private func fetchReply() async throws -> String {
         let key = KeychainHelper.read(forKey: selectedProvider.keychainKey) ?? ""
         var history = messages
-        if let memoryPrompt = HistoryManager.shared.memorySystemPrompt {
-            history.insert(ChatMessage(role: .system, content: memoryPrompt), at: 0)
+        // Ghép profile + memory thành 1 system prompt duy nhất
+        var systemParts: [String] = []
+        if let profile = HistoryManager.shared.profileSystemPrompt { systemParts.append(profile) }
+        if let memory  = HistoryManager.shared.memorySystemPrompt  { systemParts.append(memory) }
+        if !systemParts.isEmpty {
+            history.insert(ChatMessage(role: .system, content: systemParts.joined(separator: "\n\n")), at: 0)
         }
         let lastAtt = messages.last(where: { $0.role == .user })?.attachments ?? []
         switch selectedProvider {
