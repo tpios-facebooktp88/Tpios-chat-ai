@@ -170,10 +170,8 @@ final class HistoryManager: ObservableObject {
     var profileSystemPrompt: String? {
         let filled = profile.filter { !$0.content.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !filled.isEmpty else { return nil }
-        let lines = filled.map { "- \($0.title): \($0.content)" }.joined(separator: "
-")
-        return "Thông tin về người dùng mà bạn cần nhớ:
-\(lines)"
+        let lines = filled.map { "- \($0.title): \($0.content)" }.joined(separator: "\n")
+        return "Thông tin về người dùng mà bạn cần nhớ:\n\(lines)"
     }
 
     var memorySystemPrompt: String? {
