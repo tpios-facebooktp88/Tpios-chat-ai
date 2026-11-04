@@ -604,84 +604,299 @@ struct HistoryTabView: View {
 
 struct MemoryTabView: View {
     @EnvironmentObject var theme: ThemeManager
-    @StateObject private var historyMgr = HistoryManager.shared
+    @StateObject private var histMgr = HistoryManager.shared
+    @State private var editingField: ProfileField? = nil
+    @State private var editContent  = ""
+    @State private var editingMemory: MemoryItem? = nil
+    @State private var editMemContent = ""
+    @State private var showAddMemory = false
+    @State private var newMemContent = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("AI Memory")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(theme.textPri)
-                    Text("Những điều quan trọng mình luôn nhớ về bạn")
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.textSec)
-                }
-                Spacer()
-                Text("\(historyMgr.memories.count)/50")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textSec)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
 
-            Divider().background(theme.divider)
+                    // ── Hồ sơ cố định ────────────────────────────────
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("HỒ SƠ CỦA ANH")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(theme.accent)
+                            Text("AI luôn nhớ những thông tin này")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textSec)
+                        }
+                        Spacer()
+                        Text("TÙY CHỈNH")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.textSec)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
 
-            if historyMgr.memories.isEmpty {
-                Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "brain")
-                        .font(.system(size: 40))
-                        .foregroundColor(theme.textSec)
-                    Text("Chưa có thông tin nào được ghi nhớ")
-                        .foregroundColor(theme.textSec)
-                        .multilineTextAlignment(.center)
-                    Text("AI sẽ tự động ghi nhớ thông tin quan trọng\ntrong lúc chat")
-                        .font(.caption)
-                        .foregroundColor(theme.textSec.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                }
-                Spacer()
-            } else {
-                List {
-                    ForEach(historyMgr.memories) { item in
-                        HStack(spacing: 12) {
-                            Circle()
-                                .fill(theme.accent)
-                                .frame(width: 8, height: 8)
-                                .padding(.top, 4)
-                                .alignmentGuide(.top) { d in d[.top] }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.content)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(theme.textPri)
-                                Text(item.savedAt, style: .date)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(theme.textSec)
+                    VStack(spacing: 8) {
+                        ForEach(histMgr.profile) { field in
+                            Button {
+                                editingField = field
+                                editContent  = field.content
+                            } label: {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle().fill(theme.accent.opacity(0.18))
+                                            .frame(width: 36, height: 36)
+                                        Image(systemName: field.icon)
+                                            .font(.system(size: 16))
+                                            .foregroundColor(theme.accent)
+                                    }
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(field.title)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(theme.textPri)
+                                        Text(field.content.isEmpty ? field.placeholder : field.content)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(field.content.isEmpty ? theme.textSec.opacity(0.5) : theme.textSec)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(theme.textSec)
+                                }
+                                .padding(12)
+                                .background(theme.surface)
+                                .cornerRadius(14)
                             }
                         }
-                        .padding(.vertical, 4)
-                        .listRowBackground(theme.surface)
-                        .listRowSeparatorTint(theme.divider)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                historyMgr.deleteMemory(item)
-                            } label: { Label("Xóa", systemImage: "trash") }
+                    }
+                    .padding(.horizontal, 16)
+
+                    // ── Ghi nhớ ngữ cảnh ─────────────────────────────
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("GHI NHỚ CỦA AI")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(theme.accent)
+                            Text("\(histMgr.memories.count) mục thông tin")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textSec)
+                        }
+                        Spacer()
+                        Button {
+                            newMemContent = ""
+                            showAddMemory = true
+                        } label: {
+                            Label("Thêm mới", systemImage: "plus")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(theme.accent)
+                                .cornerRadius(20)
                         }
                     }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 24)
+                    .padding(.bottom, 8)
 
-                Button(role: .destructive) {
-                    historyMgr.clearAllMemory()
-                } label: {
-                    Text("Xóa tất cả bộ nhớ")
-                        .font(.footnote)
-                        .foregroundColor(.red)
-                        .padding(.vertical, 10)
+                    if histMgr.memories.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "brain")
+                                .font(.system(size: 32))
+                                .foregroundColor(theme.textSec.opacity(0.4))
+                            Text("AI sẽ tự ghi nhớ trong lúc chat")
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.textSec)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 30)
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(histMgr.memories) { item in
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle().fill(theme.accent.opacity(0.18))
+                                            .frame(width: 32, height: 32)
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(theme.accent)
+                                    }
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(item.content)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(theme.textPri)
+                                            .lineLimit(3)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "calendar")
+                                                .font(.system(size: 10))
+                                            Text(item.savedAt.formatted(.dateTime.day().month().year().hour().minute()))
+                                                .font(.system(size: 11))
+                                        }
+                                        .foregroundColor(theme.textSec)
+                                    }
+                                    Spacer()
+                                    HStack(spacing: 12) {
+                                        Button {
+                                            editingMemory  = item
+                                            editMemContent = item.content
+                                        } label: {
+                                            Text("Sửa")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(theme.accent)
+                                        }
+                                        Button {
+                                            histMgr.deleteMemory(item)
+                                        } label: {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 13))
+                                                .foregroundColor(.red)
+                                        }
+                                    }
+                                }
+                                .padding(12)
+                                .background(theme.surface)
+                                .cornerRadius(14)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    // Xóa tất cả
+                    if !histMgr.memories.isEmpty {
+                        Button(role: .destructive) {
+                            histMgr.clearAllMemory()
+                        } label: {
+                            Text("Xóa tất cả ghi nhớ")
+                                .font(.system(size: 13))
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(theme.surface)
+                                .cornerRadius(14)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                    }
+
+                    Spacer(minLength: 30)
                 }
+            }
+            .navigationTitle("Trí nhớ của ChatAI")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text("AI MEMORY").font(.system(size: 10, weight: .semibold)).foregroundColor(theme.accent)
+                        Text("Trí nhớ của ChatAI").font(.system(size: 15, weight: .bold)).foregroundColor(theme.textPri)
+                    }
+                }
+            }
+            .toolbarBackground(theme.bg, for: .navigationBar)
+            .preferredColorScheme(.dark)
+        }
+        // ── Sheet sửa hồ sơ ──────────────────────────────────────────
+        .sheet(item: $editingField) { field in
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle().fill(theme.accent.opacity(0.18)).frame(width: 40, height: 40)
+                            Image(systemName: field.icon).foregroundColor(theme.accent)
+                        }
+                        Text(field.title).font(.headline).foregroundColor(theme.textPri)
+                    }
+                    .padding(.top, 8)
+
+                    TextEditor(text: $editContent)
+                        .frame(minHeight: 120)
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textPri)
+                        .scrollContentBackground(.hidden)
+                        .background(theme.surface)
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.accent.opacity(0.4), lineWidth: 1))
+
+                    Text(field.placeholder)
+                        .font(.caption).foregroundColor(theme.textSec)
+
+                    Spacer()
+                }
+                .padding()
+                .background(theme.bg.ignoresSafeArea())
+                .navigationTitle("Chỉnh sửa")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Hủy") { editingField = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Lưu") {
+                            histMgr.updateProfile(id: field.id, content: editContent)
+                            editingField = nil
+                        }
+                        .foregroundColor(theme.accent)
+                    }
+                }
+                .preferredColorScheme(.dark)
+            }
+        }
+        // ── Sheet sửa ghi nhớ ─────────────────────────────────────────
+        .sheet(item: $editingMemory) { mem in
+            NavigationStack {
+                TextEditor(text: $editMemContent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textPri)
+                    .scrollContentBackground(.hidden)
+                    .background(theme.bg.ignoresSafeArea())
+                    .padding()
+                    .navigationTitle("Chỉnh sửa ghi nhớ")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Hủy") { editingMemory = nil }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Lưu") {
+                                if let i = histMgr.memories.firstIndex(where: { $0.id == mem.id }) {
+                                    histMgr.memories[i].content = editMemContent
+                                    histMgr.saveMemory()
+                                }
+                                editingMemory = nil
+                            }
+                            .foregroundColor(theme.accent)
+                        }
+                    }
+                    .preferredColorScheme(.dark)
+            }
+        }
+        // ── Sheet thêm ghi nhớ mới ────────────────────────────────────
+        .sheet(isPresented: $showAddMemory) {
+            NavigationStack {
+                TextEditor(text: $newMemContent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textPri)
+                    .scrollContentBackground(.hidden)
+                    .background(theme.bg.ignoresSafeArea())
+                    .padding()
+                    .navigationTitle("Thêm ghi nhớ")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Hủy") { showAddMemory = false }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Thêm") {
+                                histMgr.addMemory(newMemContent)
+                                showAddMemory = false
+                            }
+                            .foregroundColor(theme.accent)
+                            .disabled(newMemContent.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                    }
+                    .preferredColorScheme(.dark)
             }
         }
     }
