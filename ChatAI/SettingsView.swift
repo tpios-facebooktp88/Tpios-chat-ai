@@ -129,12 +129,14 @@ struct SettingsTabView: View {
 
 struct VoiceRoleSettingsView: View {
     @EnvironmentObject var theme: ThemeManager
-    @AppStorage("autoSpeakReplies") var autoSpeak: Bool   = false
+    @AppStorage("autoSpeakReplies") var autoSpeak: Bool    = false
     @AppStorage("voiceGender")      var voiceGender: String = VoiceGender.female.rawValue
-    @AppStorage("live_voice")       var liveVoice: String  = "Zephyr"
-    @AppStorage("live_persona")     var persona: String    = LivePersona.defaultText
-    @AppStorage("live_barge_in")    var bargeIn: Bool      = false
-    @AppStorage("live_model")       var liveModel: String  = "gemini-2.0-flash-live-001"
+    @AppStorage("live_voice")       var liveVoice: String   = "Zephyr"
+    @AppStorage("live_persona")     var persona: String     = LivePersona.defaultText
+    @AppStorage("live_barge_in")    var bargeIn: Bool       = false
+
+    // Keyboard dismiss + scroll-to-editor
+    @FocusState private var editorFocused: Bool
 
     var body: some View {
         ZStack {
@@ -145,65 +147,133 @@ struct VoiceRoleSettingsView: View {
                     .brightness(theme.wallBri - 1.0)
                     .overlay(Color.black.opacity(theme.wallOvl))
             }
-            Form {
-                // ── TTS thông thường ──────────────────────────────
-                Section {
-                    Toggle("Tự động đọc to câu trả lời", isOn: $autoSpeak).tint(theme.accent)
-                    Picker("Giọng đọc TTS", selection: $voiceGender) {
-                        ForEach(VoiceGender.allCases) { g in Text(g.rawValue).tag(g.rawValue) }
-                    }
-                } header: { Text("GIỌNG NÓI TTS").foregroundColor(theme.accent) }
-                .listRowBackground(theme.surface)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
 
-                // ── Gemini Live voice ──────────────────────────────
-                Section {
-                    Picker("Giọng Gemini Live", selection: $liveVoice) {
-                        ForEach(LiveVoices.all) { v in
-                            Text("\(v.id) – \(v.hint)").tag(v.id)
+                    // ── TTS ───────────────────────────────────────────
+                    sectionHeader("GIỌNG NÓI TTS")
+                    VStack(spacing: 0) {
+                        Toggle("Tự động đọc to câu trả lời", isOn: $autoSpeak)
+                            .tint(theme.accent).padding()
+                        Divider().background(theme.divider)
+                        Picker("Giọng đọc TTS", selection: $voiceGender) {
+                            ForEach(VoiceGender.allCases) { g in Text(g.rawValue).tag(g.rawValue) }
                         }
+                        .pickerStyle(.menu)
+                        .foregroundColor(theme.textPri)
+                        .padding()
                     }
-                    Toggle("Cho phép ngắt lời (dùng tai nghe)", isOn: $bargeIn).tint(theme.accent)
-                } header: {
-                    Text("GEMINI LIVE – GIỌNG NÓI").foregroundColor(theme.accent)
-                } footer: {
-                    Text("Chọn giọng và chế độ ngắt lời cho màn hình AI Voice").foregroundColor(theme.textSec)
-                }
-                .listRowBackground(theme.surface)
+                    .background(theme.surface).cornerRadius(14).padding(.horizontal)
 
-                // ── Vai diễn ──────────────────────────────────────
-                Section {
-                    ForEach(LivePersona.presets) { preset in
-                        Button {
-                            persona = preset.text
-                        } label: {
-                            HStack {
-                                Text(preset.id)
-                                    .foregroundColor(persona == preset.text ? theme.accent : theme.textPri)
-                                Spacer()
-                                if persona == preset.text {
-                                    Image(systemName: "checkmark.circle.fill").foregroundColor(theme.accent)
+                    // ── Gemini Live ───────────────────────────────────
+                    sectionHeader("GEMINI LIVE – GIỌNG NÓI")
+                    VStack(spacing: 0) {
+                        Picker("Giọng Gemini Live", selection: $liveVoice) {
+                            ForEach(LiveVoices.all) { v in
+                                Text("\(v.id) – \(v.hint)").tag(v.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .foregroundColor(theme.textPri)
+                        .padding()
+                        Divider().background(theme.divider)
+                        Toggle("Cho phép ngắt lời (dùng tai nghe)", isOn: $bargeIn)
+                            .tint(theme.accent).padding()
+                    }
+                    .background(theme.surface).cornerRadius(14).padding(.horizontal)
+                    Text("Chọn giọng và chế độ ngắt lời cho màn hình AI Voice")
+                        .font(.caption).foregroundColor(theme.textSec)
+                        .padding(.horizontal, 20).padding(.bottom, 8)
+
+                    // ── Vai diễn preset ───────────────────────────────
+                    sectionHeader("VAI DIỄN AI")
+                    VStack(spacing: 0) {
+                        ForEach(Array(LivePersona.presets.enumerated()), id: \.element.id) { idx, preset in
+                            Button {
+                                persona = preset.text
+                                editorFocused = false
+                            } label: {
+                                HStack {
+                                    Text(preset.id)
+                                        .foregroundColor(persona == preset.text ? theme.accent : theme.textPri)
+                                    Spacer()
+                                    if persona == preset.text {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(theme.accent)
+                                    }
                                 }
+                                .padding()
+                            }
+                            if idx < LivePersona.presets.count - 1 {
+                                Divider().background(theme.divider)
                             }
                         }
                     }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Tuỳ chỉnh vai diễn").font(.footnote).foregroundColor(theme.textSec)
+                    .background(theme.surface).cornerRadius(14).padding(.horizontal)
+
+                    // ── Tuỳ chỉnh vai diễn (không dùng TextEditor trong Form) ──
+                    sectionHeader("NỘI DUNG VAI DIỄN")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Nội dung được lưu tự động và dùng cho cả chat chữ lẫn gọi thoại")
+                            .font(.caption).foregroundColor(theme.textSec)
+
                         TextEditor(text: $persona)
-                            .frame(height: 100)
-                            .font(.system(size: 13))
+                            .focused($editorFocused)
+                            .frame(minHeight: 160)
+                            .font(.system(size: 14))
                             .foregroundColor(theme.textPri)
                             .scrollContentBackground(.hidden)
                             .background(theme.bg)
-                            .cornerRadius(8)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(editorFocused ? theme.accent : theme.divider, lineWidth: 1.5)
+                            )
+
+                        // Nút ẩn bàn phím + xác nhận lưu
+                        if editorFocused {
+                            Button {
+                                editorFocused = false
+                            } label: {
+                                Label("Xong — đã lưu", systemImage: "checkmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(theme.accent)
+                                    .cornerRadius(10)
+                            }
+                        }
                     }
-                } header: { Text("VAI DIỄN AI").foregroundColor(theme.accent) }
-                .listRowBackground(theme.surface)
+                    .padding()
+                    .background(theme.surface).cornerRadius(14)
+                    .padding(.horizontal)
+                    .padding(.bottom, 32)
+                }
+                .padding(.top, 16)
             }
-            .scrollContentBackground(.hidden)
+            // Chạm ngoài editor thì ẩn bàn phím
+            .onTapGesture { editorFocused = false }
         }
         .navigationTitle("Giọng nói & Vai trò")
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.dark)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Xong") { editorFocused = false }
+                    .foregroundColor(theme.accent)
+            }
+        }
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(theme.accent)
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 6)
     }
 }
 
