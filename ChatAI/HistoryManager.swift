@@ -30,7 +30,18 @@ struct ChatSession: Identifiable, Codable {
     }
 }
 
+// MARK: - User Profile (hồ sơ cố định, chỉ sửa không xóa)
+
+struct ProfileField: Identifiable, Codable {
+    let id: String          // key cố định
+    let icon: String        // SF Symbol
+    let title: String       // tên hiển thị
+    var content: String     // nội dung người dùng điền
+    let placeholder: String // gợi ý khi trống
+}
+
 // MARK: - Memory Item (thông tin AI ghi nhớ)
+
 
 struct MemoryItem: Identifiable, Codable {
     let id: UUID
@@ -51,18 +62,22 @@ final class HistoryManager: ObservableObject {
 
     @Published var sessions: [ChatSession] = []
     @Published var memories: [MemoryItem] = []
+    @Published var profile: [ProfileField] = UserProfile.defaultFields
 
     private let docsDir: URL
     private let historyDir: URL
     private let memoryFile: URL
+    private let profileFile: URL
 
     private init() {
         docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         historyDir = docsDir.appendingPathComponent("ChatHistory")
         memoryFile = docsDir.appendingPathComponent("memory.json")
+        profileFile = docsDir.appendingPathComponent("profile.json")
         try? FileManager.default.createDirectory(at: historyDir, withIntermediateDirectories: true)
         loadSessions()
         loadMemory()
+        loadProfile()
     }
 
     func loadSessions() {
@@ -124,10 +139,48 @@ final class HistoryManager: ObservableObject {
         saveMemory()
     }
 
+    // ── Profile ──────────────────────────────────────────────────────────────
+
+    func loadProfile() {
+        guard let data = try? Data(contentsOf: profileFile),
+              let saved = try? JSONDecoder().decode([ProfileField].self, from: data) else { return }
+        // Merge: giữ cấu trúc mặc định, chỉ cập nhật content
+        var merged = UserProfile.defaultFields
+        for i in merged.indices {
+            if let found = saved.first(where: { $0.id == merged[i].id }) {
+                merged[i].content = found.content
+            }
+        }
+        profile = merged
+    }
+
+    func saveProfile() {
+        if let data = try? JSONEncoder().encode(profile) {
+            try? data.write(to: profileFile)
+        }
+    }
+
+    func updateProfile(id: String, content: String) {
+        if let i = profile.firstIndex(where: { $0.id == id }) {
+            profile[i].content = content
+            saveProfile()
+        }
+    }
+
+    var profileSystemPrompt: String? {
+        let filled = profile.filter { !$0.content.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !filled.isEmpty else { return nil }
+        let lines = filled.map { "- \($0.title): \($0.content)" }.joined(separator: "
+")
+        return "Thông tin về người dùng mà bạn cần nhớ:
+\(lines)"
+    }
+
     var memorySystemPrompt: String? {
         guard !memories.isEmpty else { return nil }
         let items = memories.map { "- \($0.content)" }.joined(separator: "\n")
-        return "Đây là thông tin quan trọng bạn đã ghi nhớ về người dùng:\n\(items)\n\nHãy sử dụng thông tin này khi phù hợp trong cuộc trò chuyện."
+        let profilePart = profileSystemPrompt.map { $0 + "\n\n" } ?? ""
+        return "\(profilePart)Đây là thông tin AI đã ghi nhớ từ cuộc trò chuyện:\n\(items)\n\nHãy sử dụng thông tin này khi phù hợp."
     }
 
     static func extractMemoryPrompt(from message: String) -> String {
@@ -140,4 +193,18 @@ final class HistoryManager: ObservableObject {
         Tin nhắn: "\(message)"
         """
     }
+}
+
+
+// MARK: - User Profile default fields
+
+enum UserProfile {
+    static let defaultFields: [ProfileField] = [
+        ProfileField(id: "name",    icon: "person.fill",       title: "Tên của bạn",       content: "", placeholder: "Anh tên là..."),
+        ProfileField(id: "job",     icon: "briefcase.fill",    title: "Công việc / Dự án",  content: "", placeholder: "Anh đang làm..."),
+        ProfileField(id: "hobby",   icon: "heart.fill",        title: "Sở thích",           content: "", placeholder: "Anh thích..."),
+        ProfileField(id: "goal",    icon: "target",            title: "Mục tiêu",           content: "", placeholder: "Mục tiêu của anh là..."),
+        ProfileField(id: "address", icon: "bubble.left.fill",  title: "Cách xưng hô",       content: "", placeholder: "Em xưng... gọi anh là..."),
+        ProfileField(id: "special", icon: "star.fill",         title: "Yêu cầu đặc biệt",   content: "", placeholder: "Cách trả lời hoặc lưu ý riêng..."),
+    ]
 }
