@@ -1,4 +1,4 @@
-name: Chatai-claude
+name: ChatAI
 options:
   bundleIdPrefix: com.tpios
 targets:
