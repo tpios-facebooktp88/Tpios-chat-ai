@@ -500,7 +500,7 @@ struct TypingIndicator: View {
 struct HistoryTabView: View {
     @EnvironmentObject var theme: ThemeManager
     @ObservedObject var viewModel: ChatViewModel
-    @StateObject private var historyMgr = HistoryManager.shared
+    @ObservedObject private var historyMgr = HistoryManager.shared
     @State private var renameSession: ChatSession?
     @State private var newTitle = ""
 
@@ -604,7 +604,7 @@ struct HistoryTabView: View {
 
 struct MemoryTabView: View {
     @EnvironmentObject var theme: ThemeManager
-    @StateObject private var histMgr = HistoryManager.shared
+    @ObservedObject private var histMgr = HistoryManager.shared
     @State private var editingField: ProfileField? = nil
     @State private var editContent  = ""
     @State private var editingMemory: MemoryItem? = nil
