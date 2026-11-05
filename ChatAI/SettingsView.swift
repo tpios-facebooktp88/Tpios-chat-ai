@@ -27,7 +27,7 @@ struct SettingsTabView: View {
                     // ── Header ────────────────────────────────────────
                     Section {
                         HStack(spacing: 14) {
-                            if let img = UIImage(named: "companion_neutral") {
+                            if let img = UIImage(named: "companion_neutral.webp") ?? UIImage(named: "companion_neutral") {
                                 Image(uiImage: img)
                                     .resizable().scaledToFill()
                                     .frame(width: 60, height: 60)
