@@ -131,7 +131,7 @@ struct CompanionImageView: View {
 
     @ViewBuilder
     private func companionImage(_ name: String) -> some View {
-        if let uiImage = UIImage(named: name) {
+        if let uiImage = UIImage(named: name + ".webp") ?? UIImage(named: name) {
             Image(uiImage: uiImage)
                 .resizable()
                 .scaledToFill()
@@ -258,7 +258,7 @@ struct RobotFacePreviewView: View {
                             } label: {
                                 VStack(spacing: 6) {
                                     // Thumbnail nhỏ
-                                    if let img = UIImage(named: item.imageName) {
+                                    if let img = UIImage(named: item.imageName + ".webp") ?? UIImage(named: item.imageName) {
                                         Image(uiImage: img)
                                             .resizable()
                                             .scaledToFill()
