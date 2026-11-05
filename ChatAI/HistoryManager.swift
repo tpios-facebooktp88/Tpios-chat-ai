@@ -168,10 +168,21 @@ final class HistoryManager: ObservableObject {
     }
 
     var profileSystemPrompt: String? {
+        // Reload từ disk để đảm bảo luôn dùng dữ liệu mới nhất
+        if let data = try? Data(contentsOf: profileFile),
+           let saved = try? JSONDecoder().decode([ProfileField].self, from: data) {
+            var merged = UserProfile.defaultFields
+            for i in merged.indices {
+                if let found = saved.first(where: { $0.id == merged[i].id }) {
+                    merged[i].content = found.content
+                }
+            }
+            profile = merged
+        }
         let filled = profile.filter { !$0.content.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !filled.isEmpty else { return nil }
         let lines = filled.map { "- \($0.title): \($0.content)" }.joined(separator: "\n")
-        return "Thông tin về người dùng mà bạn cần nhớ:\n\(lines)"
+        return "Hồ sơ người dùng (AI phải nhớ và tuân theo):\n\(lines)"
     }
 
     var memorySystemPrompt: String? {
