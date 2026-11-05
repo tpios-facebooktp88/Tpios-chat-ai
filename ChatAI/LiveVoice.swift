@@ -596,6 +596,7 @@ final class LiveVoiceManager: ObservableObject {
             "model": fullModel,
             "generationConfig": generationConfig,
             "systemInstruction": ["parts": [["text": instruction]]],
+            "tools": LiveToolDeclarations.all,
             "inputAudioTranscription": [String: String](),
             "outputAudioTranscription": [String: String]()
         ]
@@ -617,6 +618,31 @@ final class LiveVoiceManager: ObservableObject {
             beginStreaming()
             return
         }
+
+        // ── Tool call: model muốn gọi function ──────────────────────
+        if let toolCall = object["toolCall"] as? [String: Any],
+           let calls = toolCall["functionCalls"] as? [[String: Any]] {
+            Task { [weak self] in
+                guard let self else { return }
+                var responses: [[String: Any]] = []
+                for call in calls {
+                    let name = call["name"] as? String ?? ""
+                    let args = call["args"] as? [String: Any] ?? [:]
+                    let callId = call["id"] as? String ?? name
+                    await MainActor.run { self.note("Tool call: \(name)(\(args))") }
+                    let result = await LiveToolRunner.run(name: name, args: args)
+                    await MainActor.run { self.note("Tool result: \(result.prefix(80))") }
+                    responses.append([
+                        "id": callId,
+                        "name": name,
+                        "response": ["result": result]
+                    ])
+                }
+                self.socket?.send(["toolResponse": ["functionResponses": responses]])
+            }
+            return
+        }
+
         if let failure = object["error"] {
             fail("Google báo lỗi: \(failure)")
             return
