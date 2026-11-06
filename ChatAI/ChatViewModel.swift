@@ -140,6 +140,12 @@ final class ChatViewModel: ObservableObject {
         var history = messages
         // Ghép profile + memory thành 1 system prompt duy nhất
         var systemParts: [String] = []
+        // Inject ngày hiện tại để model không bị lùi về training cutoff
+        let _df = DateFormatter()
+        _df.dateFormat = "EEEE, dd/MM/yyyy"
+        _df.locale = Locale(identifier: "vi_VN")
+        _df.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")
+        systemParts.append("Ngày hôm nay: \(_df.string(from: Date())).")
         if let profile = HistoryManager.shared.profileSystemPrompt { systemParts.append(profile) }
         if let memory  = HistoryManager.shared.memorySystemPrompt  { systemParts.append(memory) }
         if !systemParts.isEmpty {

@@ -547,14 +547,19 @@ final class LiveVoiceManager: ObservableObject {
         if let memory = HistoryManager.shared.memorySystemPrompt {
             instruction += "\n\n" + memory
         }
-        // Nhắc nhở chủ động nếu memory có ngày/thời gian quan trọng
+        // Inject ngày hôm nay + nhắc nhở chủ động
+        let _ldf = DateFormatter()
+        _ldf.dateFormat = "EEEE, dd/MM/yyyy"
+        _ldf.locale = Locale(identifier: "vi_VN")
+        _ldf.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")
+        instruction += "\n\nNgày hôm nay là: \(_ldf.string(from: Date()))."
         let reminders = HistoryManager.shared.memories.filter {
             let t = $0.content.lowercased()
             return t.contains("ngày") || t.contains("thứ") || t.contains("sinh nhật") ||
                    t.contains("deadline") || t.contains("hẹn") || t.contains("họp")
         }.map { "- \($0.content)" }.joined(separator: "\n")
         if !reminders.isEmpty {
-            instruction += "\n\nNhắc người dùng về các sự kiện quan trọng này nếu phù hợp trong cuộc trò chuyện:\n\(reminders)"
+            instruction += "\n\nSự kiện quan trọng người dùng đã lưu:\n\(reminders)\nKhi người dùng hỏi về hôm nay, ngày mai, hoặc bất kỳ ngày nào — hãy đối chiếu với danh sách trên và nhắc ngay nếu có sự kiện trùng khớp."
         }
         // Chế độ học tiếng Anh
         if UserDefaults.standard.bool(forKey: "englishLearningMode") {
