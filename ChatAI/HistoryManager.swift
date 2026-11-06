@@ -200,8 +200,9 @@ final class HistoryManager: ObservableObject {
     static func extractMemoryPrompt(from message: String) -> String {
         return """
         Đọc tin nhắn sau và trích xuất thông tin cá nhân quan trọng cần ghi nhớ lâu dài về người dùng.
-        Chỉ ghi nhớ các thông tin như: tên, tuổi, nghề nghiệp, nơi ở, sở thích, mục tiêu, người thân, thú cưng, thói quen, ngày quan trọng, yêu cầu đặc biệt với AI.
-        KHÔNG ghi nhớ: câu hỏi thông thường, nội dung tin tức, thời tiết, hay hội thoại bình thường không liên quan đến cá nhân người dùng.
+        Ghi nhớ các thông tin như: tên, tuổi, nghề nghiệp, nơi ở, sở thích, mục tiêu, người thân, thú cưng, thói quen, yêu cầu đặc biệt với AI.
+        ĐẶC BIỆT PHẢI GHI NHỚ: sinh nhật, ngày kỷ niệm, deadline, lịch hẹn, họp — dù là của bản thân hay của bạn bè, người thân, đồng nghiệp. Ví dụ: "Sinh nhật vợ bạn A ngày 7/11/2026", "Deadline dự án ngày 15/11".
+        KHÔNG ghi nhớ: câu hỏi thông thường, nội dung tin tức, thời tiết, hội thoại không có thông tin cụ thể.
         Nếu có thông tin cần ghi nhớ, trả về ĐÚNG FORMAT: MEMORY: <1 câu ngắn gọn súc tích>
         Nếu không có, trả về: NONE
         Chỉ trả về 1 dòng duy nhất.
