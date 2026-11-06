@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AudioToolbox
 
 // =====================================================================
 //  GỌI THOẠI TRỰC TIẾP VỚI GEMINI LIVE  (file độc lập, không phụ thuộc VoiceManager)
@@ -546,6 +547,19 @@ final class LiveVoiceManager: ObservableObject {
         if let memory = HistoryManager.shared.memorySystemPrompt {
             instruction += "\n\n" + memory
         }
+        // Nhắc nhở chủ động nếu memory có ngày/thời gian quan trọng
+        let reminders = HistoryManager.shared.memories.filter {
+            let t = $0.content.lowercased()
+            return t.contains("ngày") || t.contains("thứ") || t.contains("sinh nhật") ||
+                   t.contains("deadline") || t.contains("hẹn") || t.contains("họp")
+        }.map { "- \($0.content)" }.joined(separator: "\n")
+        if !reminders.isEmpty {
+            instruction += "\n\nNhắc người dùng về các sự kiện quan trọng này nếu phù hợp trong cuộc trò chuyện:\n\(reminders)"
+        }
+        // Chế độ học tiếng Anh
+        if UserDefaults.standard.bool(forKey: "englishLearningMode") {
+            instruction += "\n\nCHẾ ĐỘ HỌC TIẾNG ANH: Khi người dùng nói tiếng Anh, hãy nhẹ nhàng sửa lỗi phát âm/ngữ pháp nếu có, giải thích ngắn gọn, rồi tiếp tục hội thoại tự nhiên. Khuyến khích người dùng nói tiếng Anh nhiều hơn."
+        }
         if !lines.isEmpty {
             let recent = lines.suffix(12).map { line -> String in
                 let who = line.role == .user ? "Người dùng" : "Bạn"
@@ -723,6 +737,7 @@ final class LiveVoiceManager: ObservableObject {
             try io.start(voiceChat: bargeIn)
             state = .live
             faceExpression = .listening
+            AudioServicesPlaySystemSound(1113) // bíp bắt đầu
             startStatsLoop()
         } catch {
             fail("Không bật được micro hoặc loa: \(error.localizedDescription)")
@@ -761,6 +776,7 @@ final class LiveVoiceManager: ObservableObject {
         audio = nil
         socket?.close()
         socket = nil
+        if state == .live { AudioServicesPlaySystemSound(1114) } // bíp kết thúc
         state = .idle
         aiSpeaking = false
     }
@@ -919,6 +935,12 @@ struct LiveCallView: View {
                 )
                 .frame(height: geo.size.height * 0.35)
 
+                // Thinking pulse khi đang kết nối
+                if manager.state == .connecting {
+                    ThinkingDotsView()
+                        .padding(.bottom, 50)
+                }
+
                 // Status badge + gợi ý chạm
                 VStack(spacing: 6) {
                     Text(statusText)
@@ -1031,5 +1053,24 @@ struct LiveLineRow: View {
 
             if line.role == .user { Spacer(minLength: 50) }
         }
+    }
+}
+
+// MARK: - Thinking dots animation
+struct ThinkingDotsView: View {
+    @State private var phase = 0
+    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3) { i in
+                Circle()
+                    .fill(Color.white.opacity(phase == i ? 0.9 : 0.3))
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(phase == i ? 1.3 : 1.0)
+                    .animation(.easeInOut(duration: 0.3), value: phase)
+            }
+        }
+        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
 }

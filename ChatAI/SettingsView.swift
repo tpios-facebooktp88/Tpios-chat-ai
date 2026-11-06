@@ -141,7 +141,8 @@ struct VoiceRoleSettingsView: View {
     @AppStorage("voiceGender")      var voiceGender: String = VoiceGender.female.rawValue
     @AppStorage("live_voice")       var liveVoice: String   = "Zephyr"
     @AppStorage("live_persona")     var persona: String     = LivePersona.defaultText
-    @AppStorage("live_barge_in")    var bargeIn: Bool       = false
+    @AppStorage("live_barge_in")      var bargeIn: Bool       = false
+    @AppStorage("englishLearningMode") var englishMode: Bool  = false
 
     // Keyboard dismiss + scroll-to-editor
     @FocusState private var editorFocused: Bool
@@ -186,6 +187,9 @@ struct VoiceRoleSettingsView: View {
                         .padding()
                         Divider().background(theme.divider)
                         Toggle("Cho phép ngắt lời (dùng tai nghe)", isOn: $bargeIn)
+                            .tint(theme.accent).padding()
+                        Divider().background(theme.divider)
+                        Toggle("Chế độ học tiếng Anh", isOn: $englishMode)
                             .tint(theme.accent).padding()
                     }
                     .background(theme.surface).cornerRadius(14).padding(.horizontal)
