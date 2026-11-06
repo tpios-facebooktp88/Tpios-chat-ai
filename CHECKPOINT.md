@@ -10,11 +10,15 @@
 
 | Commit | Nội dung |
 |--------|----------|
+| `a643e41` | **SettingsView**: thêm section Smart Home → điều hướng vào SmartHomeSettingsView |
+| `b449c47` | Docs: update CHECKPOINT Smart Home |
 | `40aa062` | **Smart Home**: SmartHomeSettings.swift + LiveTools control_device/get_device_status |
 | `0e42c96` | Fix CompanionView: `UIImage(named:)` cần `.webp` extension — ảnh biểu cảm đã hiện đúng |
 | `d3fe59a` | Fix SettingsView: tương tự — ảnh header Settings đã hiện đúng |
 | `38eefe6` | Nén 8 ảnh companion PNG→WebP, 7.6MB→785KB (giảm 90%) |
 | `ed3a5c6` | Thêm Gemini Live function calling: weather, news, search, datetime |
+
+**Quy tắc làm việc:** Trước khi code hay sửa bất cứ gì, em sẽ báo anh trước và chờ anh ok mới thực hiện.
 
 **Quy tắc quan trọng:** Trong project này, `UIImage(named:)` cần explicit `.webp` extension. SwiftUI `Image("name")` thì không cần. Mọi chỗ dùng `UIImage(named:)` với ảnh companion phải viết `UIImage(named: "companion_xxx.webp") ?? UIImage(named: "companion_xxx")`.
 
@@ -115,8 +119,21 @@ Lệnh giọng nói ví dụ:
 
 ---
 
+## Giới hạn iOS cần biết
+
+| Tính năng | Có làm được không |
+|-----------|------------------|
+| Điều khiển Smart Home qua HA | ✅ Đã làm |
+| Mở app khác bằng URL scheme | ✅ Có thể thêm |
+| Chạy iOS Shortcuts | ✅ Có thể thêm (`shortcuts://run-shortcut?name=...`) |
+| Thay đổi âm lượng hệ thống | ❌ Apple chặn |
+| Điều khiển app khác đang chạy | ❌ Apple chặn |
+
+---
+
 ## Việc có thể làm tiếp
 
+- Thêm tool `run_shortcut` — gọi iOS Shortcuts bằng giọng nói (không cần thiết bị HA)
 - Nâng chất lượng tool: thêm API key OpenWeatherMap / NewsAPI vào Settings nếu muốn kết quả chính xác hơn
 - Thêm provider giọng nói khác (ElevenLabs, OpenAI TTS) vào `VoiceManager.swift`
 - Thêm biểu cảm nhân vật mới: thêm ảnh `.webp` vào `ChatAI/`, map vào `RobotFaceExpression.imageName`
