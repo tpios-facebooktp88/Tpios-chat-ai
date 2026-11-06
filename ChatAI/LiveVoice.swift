@@ -884,6 +884,8 @@ struct LiveCallView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear  { UIApplication.shared.isIdleTimerDisabled = true  }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
     }
 
     @ViewBuilder
@@ -936,7 +938,7 @@ struct LiveCallView: View {
                 .padding(.bottom, 12)
             }
         }
-        .frame(height: UIScreen.main.bounds.height * 0.52)
+        .frame(height: UIScreen.main.bounds.height * 0.44)
     }
 
     @ViewBuilder
