@@ -938,7 +938,7 @@ struct LiveCallView: View {
                 .padding(.bottom, 12)
             }
         }
-        .frame(height: UIScreen.main.bounds.height * 0.44)
+        .frame(height: UIScreen.main.bounds.height * 0.52)
     }
 
     @ViewBuilder

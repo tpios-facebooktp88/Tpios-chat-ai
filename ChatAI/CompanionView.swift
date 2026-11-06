@@ -134,8 +134,7 @@ struct CompanionImageView: View {
         if let uiImage = UIImage(named: name + ".webp") ?? UIImage(named: name) {
             Image(uiImage: uiImage)
                 .resizable()
-                .scaledToFill()
-                .clipped()
+                .scaledToFit()
         } else {
             // fallback nếu tên ảnh không đúng
             Color(red: 0.04, green: 0.08, blue: 0.18)
