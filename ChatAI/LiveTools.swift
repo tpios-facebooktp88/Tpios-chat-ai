@@ -137,22 +137,39 @@ enum LiveToolRunner {
         }
     }
 
+    // Trích xuất title + description từ RSS, trả về "Tiêu đề: ... — Tóm tắt: ..."
     private static func extractRssTitles(from xml: String, max: Int) -> [String] {
         var results: [String] = []
         var search = xml
-        var skipped = false   // bỏ qua <title> đầu tiên (tên feed)
-        while results.count < max, let start = search.range(of: "<title>") {
-            search = String(search[start.upperBound...])
-            guard let end = search.range(of: "</title>") else { break }
-            let raw = String(search[..<end.lowerBound])
-                .replacingOccurrences(of: "<![CDATA[", with: "")
-                .replacingOccurrences(of: "]]>", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            search = String(search[end.upperBound...])
-            if !skipped { skipped = true; continue }
-            if !raw.isEmpty { results.append(raw) }
+        var skippedFirst = false
+
+        while results.count < max {
+            // Lấy từng <item>...</item>
+            guard let itemStart = search.range(of: "<item>"),
+                  let itemEnd = search.range(of: "</item>") else { break }
+            let item = String(search[itemStart.upperBound..<itemEnd.lowerBound])
+            search = String(search[itemEnd.upperBound...])
+
+            if !skippedFirst { skippedFirst = true; continue } // bỏ qua item đầu (feed header)
+
+            let title = extractTag("title", from: item)
+            let desc  = extractTag("description", from: item)
+
+            guard !title.isEmpty else { continue }
+            let entry = desc.isEmpty ? title : "\(title) — \(desc)"
+            results.append(entry)
         }
         return results
+    }
+
+    private static func extractTag(_ tag: String, from xml: String) -> String {
+        guard let s = xml.range(of: "<\(tag)>"),
+              let e = xml.range(of: "</\(tag)>") else { return "" }
+        return String(xml[s.upperBound..<e.lowerBound])
+            .replacingOccurrences(of: "<![CDATA[", with: "")
+            .replacingOccurrences(of: "]]>", with: "")
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // ── Tìm kiếm — Google News RSS (tốt cho nội dung Việt, trending, drama) ──
