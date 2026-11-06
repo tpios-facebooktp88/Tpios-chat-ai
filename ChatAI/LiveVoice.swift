@@ -822,6 +822,15 @@ struct LiveCallButton: View {
         }
         if added {
             viewModel.saveCurrentSession()
+            // Extract memory từ những gì user nói trong cuộc gọi (dùng lại logic của ChatViewModel)
+            let userLines = transcript
+                .filter { $0.role == .user }
+                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ". ")
+            if !userLines.isEmpty {
+                Task { await viewModel.extractMemoryFromVoice(userLines) }
+            }
         }
     }
 }

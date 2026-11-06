@@ -94,6 +94,10 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    func extractMemoryFromVoice(_ userText: String) async {
+        await extractMemory(from: userText)
+    }
+
     private func extractMemory(from userMessage: String) async {
         let prompt = HistoryManager.extractMemoryPrompt(from: userMessage)
         let key = KeychainHelper.read(forKey: selectedProvider.keychainKey) ?? ""
