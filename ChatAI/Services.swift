@@ -73,7 +73,12 @@ struct GeminiService {
             }
             return ["role": m.role == .assistant ? "model" : "user", "parts": [["text": m.content]]]
         }
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["contents": contents])
+        var body: [String: Any] = ["contents": contents]
+        // Gemini dùng systemInstruction riêng, không nhận role "system" trong contents
+        if let sysMsg = history.first(where: { $0.role == .system }) {
+            body["systemInstruction"] = ["parts": [["text": sysMsg.content]]]
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let text = String(data: data, encoding: .utf8) ?? "unknown error"
