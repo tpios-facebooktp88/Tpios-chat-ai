@@ -71,7 +71,7 @@ enum RobotFaceMood {
 
         // Yêu thương / thả thính
         if has(["yêu", "thương", "nhớ", "anh ơi", "em yêu", "❤️", "🥰", "😍", "💕", "💖", "😘"])
-                                                                        { return .love }
+                                                                        { return .happy }
         // Vui / hài hước
         if has(["haha", "hihi", "hehe", "ha ha", "hì hì", "😂", "🤣", "😆",
                 "vui quá", "buồn cười", "hài", "dễ thương", "cute"])   { return .happy }
