@@ -68,15 +68,32 @@ enum RobotFaceMood {
     static func guess(from text: String) -> RobotFaceExpression? {
         let lower = text.lowercased()
         func has(_ phrases: [String]) -> Bool { phrases.contains { lower.contains($0) } }
-        if has(["buồn ngủ", "ngáp", "mệt"])                           { return .sleepy }
-        if has(["haha", "hihi", "hehe", "ha ha", "hì hì"])           { return .happy }
-        if has(["thật sao", "trời ơi", "bất ngờ", "wow", "ôi"])      { return .surprised }
-        if has(["hmm", "ừm", "để mình nghĩ", "để xem", "suy nghĩ"])  { return .thinking }
-        if has(["xin lỗi", "rất tiếc", "tiếc quá", "buồn"])          { return .sad }
-        if has(["bối rối", "không hiểu", "hả"])                       { return .confused }
-        if has(["tức", "bực", "tệ", "sai rồi", "không được"])        { return .angry }
-        if has(["tuyệt", "vui", "thích", "chúc mừng", "cảm ơn"])     { return .happy }
-        if has(["nháy", "winky", "😉"])                                { return .wink }
+
+        // Yêu thương / thả thính
+        if has(["yêu", "thương", "nhớ", "anh ơi", "em yêu", "❤️", "🥰", "😍", "💕", "💖", "😘"])
+                                                                        { return .love }
+        // Vui / hài hước
+        if has(["haha", "hihi", "hehe", "ha ha", "hì hì", "😂", "🤣", "😆",
+                "vui quá", "buồn cười", "hài", "dễ thương", "cute"])   { return .happy }
+        // Winky
+        if has(["😉", "😏", "nháy mắt", "winky", "ý ý", "hiểu ý"])    { return .wink }
+        // Bất ngờ
+        if has(["thật sao", "trời ơi", "bất ngờ", "wow", "ôi trời",
+                "không thể tin", "😱", "😮", "🤯", "ngỡ ngàng"])       { return .surprised }
+        // Suy nghĩ
+        if has(["hmm", "ừm", "để mình nghĩ", "để xem", "suy nghĩ",
+                "thú vị", "🤔", "cho mình nghĩ", "phức tạp"])          { return .thinking }
+        // Buồn
+        if has(["xin lỗi", "rất tiếc", "tiếc quá", "buồn", "tội nghiệp",
+                "😢", "😭", "🥺", "thương quá", "đáng tiếc"])          { return .sad }
+        // Tức giận
+        if has(["tức", "bực", "tệ", "sai rồi", "không được", "thất vọng",
+                "😤", "😠", "😡", "không ổn", "vô lý"])                { return .angry }
+        // Mệt / buồn ngủ
+        if has(["buồn ngủ", "ngáp", "mệt", "uể oải", "😴", "🥱"])     { return .sleepy }
+        // Tuyệt / cảm ơn
+        if has(["tuyệt", "thích", "chúc mừng", "cảm ơn", "giỏi", "hay",
+                "xuất sắc", "🎉", "👏", "🥳", "tốt lắm", "quá đỉnh"]) { return .happy }
         return nil
     }
 }
