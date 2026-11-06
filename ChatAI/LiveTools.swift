@@ -15,7 +15,9 @@ enum LiveToolDeclarations {
                 weatherDecl,
                 newsDecl,
                 searchDecl,
-                datetimeDecl
+                datetimeDecl,
+                controlDeviceDecl,
+                getDeviceStatusDecl
             ]
         ]]
     }
@@ -73,6 +75,44 @@ enum LiveToolDeclarations {
             "properties": [:] as [String: Any]
         ]
     ]}
+
+    private static var controlDeviceDecl: [String: Any] {[
+        "name": "control_device",
+        "description": "Điều khiển thiết bị smart home: bật/tắt đèn, điều hòa, ổ cắm, TV, rèm cửa.",
+        "parameters": [
+            "type": "OBJECT",
+            "properties": [
+                "entity_id": [
+                    "type": "STRING",
+                    "description": "ID thiết bị trong Home Assistant. Ví dụ: 'light.living_room', 'switch.fan', 'climate.ac'."
+                ],
+                "action": [
+                    "type": "STRING",
+                    "description": "Hành động: 'bật', 'tắt', 'toggle', 'on', 'off'. Với điều hòa có thể là 'set_temperature'."
+                ],
+                "temperature": [
+                    "type": "NUMBER",
+                    "description": "Nhiệt độ (°C) khi điều khiển điều hòa. Chỉ dùng cho climate entity."
+                ]
+            ],
+            "required": ["entity_id", "action"]
+        ]
+    ]}
+
+    private static var getDeviceStatusDecl: [String: Any] {[
+        "name": "get_device_status",
+        "description": "Kiểm tra trạng thái thiết bị smart home hoặc liệt kê tất cả thiết bị.",
+        "parameters": [
+            "type": "OBJECT",
+            "properties": [
+                "entity_id": [
+                    "type": "STRING",
+                    "description": "ID thiết bị cần kiểm tra. Nếu để 'list' sẽ liệt kê tất cả thiết bị."
+                ]
+            ],
+            "required": ["entity_id"]
+        ]
+    ]}
 }
 
 // MARK: - Thực thi tool
@@ -80,11 +120,13 @@ enum LiveToolDeclarations {
 enum LiveToolRunner {
     static func run(name: String, args: [String: Any]) async -> String {
         switch name {
-        case "get_weather":  return await getWeather(args)
-        case "get_news":     return await getNews(args)
-        case "web_search":   return await webSearch(args)
-        case "get_datetime": return getDatetime()
-        default:             return "Tool '\(name)' không được hỗ trợ."
+        case "get_weather":       return await getWeather(args)
+        case "get_news":          return await getNews(args)
+        case "web_search":        return await webSearch(args)
+        case "get_datetime":      return getDatetime()
+        case "control_device":    return await controlDevice(args)
+        case "get_device_status": return await getDeviceStatus(args)
+        default:                  return "Tool '\(name)' không được hỗ trợ."
         }
     }
 
@@ -192,6 +234,29 @@ enum LiveToolRunner {
         } catch {
             return "Lỗi khi tìm kiếm: \(error.localizedDescription)"
         }
+    }
+
+    // ── Smart Home — Home Assistant REST API ─────────────────────────
+    private static func controlDevice(_ args: [String: Any]) async -> String {
+        guard let entityId = args["entity_id"] as? String,
+              let action   = args["action"] as? String else {
+            return "Thiếu thông tin thiết bị hoặc hành động."
+        }
+        var params: [String: Any] = [:]
+        if let temp = args["temperature"] as? Double {
+            params["temperature"] = temp
+        }
+        return await SmartHomeAPI.controlDevice(entityId: entityId, action: action, params: params)
+    }
+
+    private static func getDeviceStatus(_ args: [String: Any]) async -> String {
+        guard let entityId = args["entity_id"] as? String else {
+            return "Thiếu entity_id."
+        }
+        if entityId == "list" {
+            return await SmartHomeAPI.listDevices()
+        }
+        return await SmartHomeAPI.getDeviceStatus(entityId: entityId)
     }
 
     // ── Ngày giờ — không cần network ─────────────────────────────────
