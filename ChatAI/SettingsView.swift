@@ -84,6 +84,14 @@ struct SettingsTabView: View {
                     } header: { sectionHeader("person.crop.circle", "TÀI KHOẢN") }
                     .listRowBackground(theme.surface)
 
+                    // ── Smart Home ────────────────────────────────────
+                    Section {
+                        NavigationLink { SmartHomeSettingsView() } label: {
+                            settingsRow("house.fill", "Smart Home")
+                        }
+                    } header: { sectionHeader("house", "SMART HOME") }
+                    .listRowBackground(theme.surface)
+
                     // ── Thông tin ─────────────────────────────────────
                     Section {
                         HStack {
