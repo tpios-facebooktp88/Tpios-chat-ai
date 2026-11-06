@@ -6,6 +6,19 @@
 
 ---
 
+## Trạng thái hiện tại (cập nhật theo commit mới nhất)
+
+| Commit | Nội dung |
+|--------|----------|
+| `0e42c96` | Fix CompanionView: `UIImage(named:)` cần `.webp` extension — ảnh biểu cảm đã hiện đúng |
+| `d3fe59a` | Fix SettingsView: tương tự — ảnh header Settings đã hiện đúng |
+| `38eefe6` | Nén 8 ảnh companion PNG→WebP, 7.6MB→785KB (giảm 90%) |
+| `ed3a5c6` | Thêm Gemini Live function calling: weather, news, search, datetime |
+
+**Quy tắc quan trọng:** Trong project này, `UIImage(named:)` cần explicit `.webp` extension. SwiftUI `Image("name")` thì không cần. Mọi chỗ dùng `UIImage(named:)` với ảnh companion phải viết `UIImage(named: "companion_xxx.webp") ?? UIImage(named: "companion_xxx")`.
+
+---
+
 ## Kiến trúc chính
 
 | File | Vai trò |
@@ -51,7 +64,7 @@ Chỉ cần sửa `LiveTools.swift` — 2 chỗ:
 
 ```swift
 // 1. Thêm khai báo vào LiveToolDeclarations.all
-FunctionDeclaration(name: "ten_tool", description: "...", parameters: ...)
+["name": "ten_tool", "description": "...", "parameters": [...]]
 
 // 2. Thêm case vào LiveToolRunner.run()
 case "ten_tool": return await myFunction(args)
@@ -66,7 +79,7 @@ Không cần đụng `LiveVoice.swift`.
 8 file `ChatAI/companion_*.webp` — WebP quality=85, tổng 785KB (gốc PNG 7.6MB).
 
 - SwiftUI `Image("companion_neutral")` → load tự động, không cần extension
-- `UIImage(named:)` → cần explicit: `UIImage(named: "companion_neutral.webp")`
+- `UIImage(named:)` → **bắt buộc** phải có extension: `UIImage(named: "companion_neutral.webp")`
 
 ---
 
@@ -86,4 +99,4 @@ Không cần config thêm sau khi thêm file `.swift` hay `.webp` vào `ChatAI/`
 - Thêm tool mới vào Gemini Live (xem hướng dẫn ở trên)
 - Nâng chất lượng tool: thêm API key OpenWeatherMap / NewsAPI vào Settings nếu muốn kết quả chính xác hơn
 - Thêm provider giọng nói khác (ElevenLabs, OpenAI TTS) vào `VoiceManager.swift`
-- Thêm biểu cảm nhân vật mới: thêm ảnh `.webp` vào `ChatAI/`, map vào `RobotFaceExpression`
+- Thêm biểu cảm nhân vật mới: thêm ảnh `.webp` vào `ChatAI/`, map vào `RobotFaceExpression.imageName`
