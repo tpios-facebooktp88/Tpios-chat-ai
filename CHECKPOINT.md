@@ -10,6 +10,7 @@
 
 | Commit | Nội dung |
 |--------|----------|
+| `40aa062` | **Smart Home**: SmartHomeSettings.swift + LiveTools control_device/get_device_status |
 | `0e42c96` | Fix CompanionView: `UIImage(named:)` cần `.webp` extension — ảnh biểu cảm đã hiện đúng |
 | `d3fe59a` | Fix SettingsView: tương tự — ảnh header Settings đã hiện đúng |
 | `38eefe6` | Nén 8 ảnh companion PNG→WebP, 7.6MB→785KB (giảm 90%) |
@@ -24,7 +25,7 @@
 | File | Vai trò |
 |------|---------|
 | `LiveVoice.swift` | WebSocket tới Gemini Live — mic → PCM 16kHz gửi đi, PCM 24kHz nhận về phát loa |
-| `LiveTools.swift` | Function calling: 4 tools (weather/news/search/datetime), không cần API key thêm |
+| `LiveTools.swift` | Function calling: 6 tools (weather/news/search/datetime/control_device/get_device_status) |
 | `CompanionView.swift` | Nhân vật 3D — 8 biểu cảm, lip-sync theo âm thanh AI |
 | `Services.swift` | Text chat: Gemini, OpenAI, Anthropic, Groq |
 | `ChatViewModel.swift` | State quản lý hội thoại |
@@ -49,14 +50,16 @@ User nói → Gemini Live xử lý
   → model đọc kết quả → nói ra loa
 ```
 
-### 4 tools hiện có (LiveTools.swift)
+### 6 tools hiện có (LiveTools.swift)
 
 | Tool | API | Key cần |
 |------|-----|---------|
 | `get_weather` | wttr.in | Không |
 | `get_news` | Google News RSS | Không |
-| `web_search` | DuckDuckGo Instant Answer | Không |
+| `web_search` | Google News RSS | Không |
 | `get_datetime` | local | Không |
+| `control_device` | Home Assistant REST | HA Token (Keychain) |
+| `get_device_status` | Home Assistant REST | HA Token (Keychain) |
 
 ### Thêm tool mới
 
@@ -94,9 +97,27 @@ Không cần config thêm sau khi thêm file `.swift` hay `.webp` vào `ChatAI/`
 
 ---
 
+## Smart Home — Home Assistant
+
+**File:** `SmartHomeSettings.swift` — settings UI + API calls  
+**Truy cập:** Settings → Smart Home
+
+Cần có:
+1. Home Assistant chạy local (Raspberry Pi, NAS, PC cũ) hoặc cloud
+2. URL: `http://192.168.1.x:8123` (local) hoặc domain nếu expose ra ngoài
+3. Long-Lived Access Token: HA Settings → Profile → Long-Lived Access Tokens → Create Token
+
+Lệnh giọng nói ví dụ:
+- "Tắt đèn phòng khách" → `control_device(entity_id: "light.living_room", action: "tắt")`
+- "Bật điều hòa 25 độ" → `control_device(entity_id: "climate.ac", action: "set_temperature", temperature: 25)`
+- "Nhiệt độ trong nhà" → `get_device_status(entity_id: "sensor.temperature")`
+- "Liệt kê thiết bị" → `get_device_status(entity_id: "list")`
+
+---
+
 ## Việc có thể làm tiếp
 
-- Thêm tool mới vào Gemini Live (xem hướng dẫn ở trên)
 - Nâng chất lượng tool: thêm API key OpenWeatherMap / NewsAPI vào Settings nếu muốn kết quả chính xác hơn
 - Thêm provider giọng nói khác (ElevenLabs, OpenAI TTS) vào `VoiceManager.swift`
 - Thêm biểu cảm nhân vật mới: thêm ảnh `.webp` vào `ChatAI/`, map vào `RobotFaceExpression.imageName`
+- Thêm tool mới vào Gemini Live (xem hướng dẫn Thêm tool mới ở trên)
