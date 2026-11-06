@@ -155,31 +155,23 @@ enum LiveToolRunner {
         return results
     }
 
-    // ── Tìm kiếm — DuckDuckGo Instant Answer (không cần key) ─────────
+    // ── Tìm kiếm — Google News RSS (tốt cho nội dung Việt, trending, drama) ──
     private static func webSearch(_ args: [String: Any]) async -> String {
         guard let query = args["query"] as? String, !query.isEmpty else {
             return "Chưa có từ khóa tìm kiếm."
         }
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        let urlStr = "https://api.duckduckgo.com/?q=\(encoded)&format=json&no_redirect=1&no_html=1"
+        // Thử Google News RSS trước (bắt được trending VN tốt hơn DuckDuckGo)
+        let urlStr = "https://news.google.com/rss/search?q=\(encoded)&hl=vi&gl=VN&ceid=VN:vi"
         guard let url = URL(string: urlStr) else { return "Không tạo được URL tìm kiếm." }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return "Không đọc được kết quả tìm kiếm."
+            let xml = String(data: data, encoding: .utf8) ?? ""
+            let titles = extractRssTitles(from: xml, max: 5)
+            if !titles.isEmpty {
+                return "Kết quả tìm kiếm '\(query)':\n" + titles.enumerated().map { "\($0.offset+1). \($0.element)" }.joined(separator: "\n")
             }
-            if let answer = json["Answer"] as? String, !answer.isEmpty {
-                return answer
-            }
-            if let abstract = json["AbstractText"] as? String, !abstract.isEmpty {
-                return String(abstract.prefix(400))
-            }
-            let related = (json["RelatedTopics"] as? [[String: Any]] ?? [])
-                .prefix(3)
-                .compactMap { $0["Text"] as? String }
-                .filter { !$0.isEmpty }
-            if !related.isEmpty { return related.joined(separator: "\n") }
-            return "Không tìm được kết quả rõ ràng cho '\(query)'. Thử hỏi cụ thể hơn."
+            return "Không tìm được kết quả cho '\(query)'."
         } catch {
             return "Lỗi khi tìm kiếm: \(error.localizedDescription)"
         }

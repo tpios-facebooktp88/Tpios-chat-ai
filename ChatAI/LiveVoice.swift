@@ -541,6 +541,8 @@ final class LiveVoiceManager: ObservableObject {
     private func connect(key: String, model: String, voice: String, persona: String) {
         var instruction = persona.trimmingCharacters(in: .whitespacesAndNewlines)
         if instruction.isEmpty { instruction = LivePersona.defaultText }
+        // Luôn dùng tool cho bất kỳ câu hỏi nào về sự kiện, tin tức, trending, drama, thời tiết — đừng tự đoán
+        instruction += "\n\nQUAN TRỌNG: Bạn có các tool để tra cứu thông tin thực tế. Khi người dùng hỏi về: tin tức, sự kiện đang xảy ra, drama, trending, TikTok, mạng xã hội, thời tiết, giá cả, kết quả thể thao, hoặc bất cứ điều gì có thể thay đổi theo thời gian — hãy LUÔN dùng tool web_search hoặc get_news TRƯỚC khi trả lời. Đừng tự đoán hoặc nói 'tôi không biết' khi chưa thử tìm kiếm."
         if let memory = HistoryManager.shared.memorySystemPrompt {
             instruction += "\n\n" + memory
         }
