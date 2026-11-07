@@ -194,7 +194,7 @@ final class HistoryManager: ObservableObject {
         guard !memories.isEmpty else { return nil }
         let items = memories.map { "- \($0.content)" }.joined(separator: "\n")
         let profilePart = profileSystemPrompt.map { $0 + "\n\n" } ?? ""
-        return "\(profilePart)Đây là thông tin AI đã ghi nhớ từ cuộc trò chuyện:\n\(items)\n\nHãy sử dụng thông tin này khi phù hợp."
+        return "\(profilePart)Đây là thông tin AI đã ghi nhớ từ cuộc trò chuyện:\n\(items)\n\nDùng thông tin này để hiểu ngữ cảnh và trả lời phù hợp. KHÔNG đọc lại, liệt kê hay nhắc đến hồ sơ/memory trong cuộc trò chuyện trừ khi người dùng hỏi trực tiếp."
     }
 
     static func extractMemoryPrompt(from message: String) -> String {
