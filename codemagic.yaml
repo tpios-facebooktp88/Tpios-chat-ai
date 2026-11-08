@@ -27,7 +27,6 @@ workflows:
           sips -z 87 87   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-29@3x.png"
           sips -z 80 80   "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@2x.png"
           sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@3x.png"
-          sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-40@3x.png"
           sips -z 120 120 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@2x.png"
           sips -z 180 180 "$ICON_DIR/icon-1024.png" --out "$ICON_DIR/icon-60@3x.png"
 

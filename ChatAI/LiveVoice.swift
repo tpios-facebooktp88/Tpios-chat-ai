@@ -793,6 +793,26 @@ final class LiveVoiceManager: ObservableObject {
         teardown()
     }
 
+    /// Gửi text message vào session đang live (không dùng mic)
+    @MainActor func sendTextMessage(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, state == .live else { return }
+
+        // Thêm vào transcript
+        openUser = nil
+        openAI = nil
+        lines.append(Line(role: .user, text: trimmed))
+
+        // Gửi lên Gemini Live qua clientContent
+        socket?.send([
+            "clientContent": [
+                "turns": [["role": "user", "parts": [["text": trimmed]]]],
+                "turnComplete": true
+            ]
+        ])
+        note("Text: \(trimmed.prefix(60))")
+    }
+
     func clearLines() {
         lines = []
         openUser = nil
@@ -867,6 +887,9 @@ struct LiveCallView: View {
     @AppStorage("live_persona") private var persona: String = LivePersona.defaultText
     @AppStorage("live_barge_in") private var bargeIn: Bool = false
 
+    @State private var typedText: String = ""
+    @FocusState private var inputFocused: Bool
+
 
     var body: some View {
         NavigationStack {
@@ -879,6 +902,11 @@ struct LiveCallView: View {
 
                     // ── Khung hội thoại cố định bên dưới nhân vật ─────
                     transcriptBox
+
+                    // ── Text input bar ─────────────────────────────────
+                    if manager.state == .live {
+                        textInputBar
+                    }
 
                     // ── Error bar ──────────────────────────────────────
                     if let message = manager.errorText {
@@ -1010,6 +1038,41 @@ struct LiveCallView: View {
         }
         ForEach(manager.lines) { line in
             LiveLineRow(line: line).id(line.id)
+        }
+    }
+
+    @ViewBuilder
+    private var textInputBar: some View {
+        HStack(spacing: 8) {
+            TextField("Gõ tin nhắn...", text: $typedText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(white: 0.15))
+                .cornerRadius(20)
+                .foregroundColor(.white)
+                .focused($inputFocused)
+                .submitLabel(.send)
+                .onSubmit { sendTyped() }
+
+            Button(action: sendTyped) {
+                Image(systemName: "paperplane.fill")
+                    .foregroundColor(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? Color(white: 0.4)
+                        : Color(red: 1, green: 0.34, blue: 0.13))
+                    .font(.system(size: 18))
+                    .padding(8)
+            }
+            .disabled(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
+    }
+
+    private func sendTyped() {
+        let text = typedText
+        typedText = ""
+        Task { @MainActor in
+            manager.sendTextMessage(text)
         }
     }
 

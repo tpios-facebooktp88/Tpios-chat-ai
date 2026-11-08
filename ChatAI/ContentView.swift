@@ -958,8 +958,6 @@ struct HistoryView: View {
 
 // MARK: - ImagePickerView
 
-import PhotosUI
-
 struct ImagePickerView: UIViewControllerRepresentable {
     let sourceType: UIImagePickerController.SourceType
     let onPick: (UIImage) -> Void
