@@ -520,6 +520,7 @@ final class LiveVoiceManager: ObservableObject {
         openUser = nil
         openAI = nil
         events = []
+        loadTranscript()
         seenKinds = []
         micStats = LiveMicStats()
         serverMessages = 0
@@ -784,7 +785,10 @@ final class LiveVoiceManager: ObservableObject {
         audio = nil
         socket?.close()
         socket = nil
-        if state == .live { AudioServicesPlaySystemSound(1114) } // bíp kết thúc
+        if state == .live {
+            AudioServicesPlaySystemSound(1114) // bíp kết thúc
+            saveTranscript()
+        }
         state = .idle
         aiSpeaking = false
     }
@@ -820,6 +824,25 @@ final class LiveVoiceManager: ObservableObject {
         lines = []
         openUser = nil
         openAI = nil
+    }
+
+    // ── Persist transcript ──────────────────────────────────────────
+    private static let transcriptKey = "live_transcript_cache"
+
+    private func saveTranscript() {
+        guard !lines.isEmpty else { return }
+        let data = lines.suffix(30).map { ["role": $0.role.rawValue, "text": $0.text] }
+        UserDefaults.standard.set(data, forKey: Self.transcriptKey)
+    }
+
+    private func loadTranscript() {
+        guard let data = UserDefaults.standard.array(forKey: Self.transcriptKey) as? [[String: String]]
+        else { return }
+        lines = data.compactMap { d in
+            guard let r = d["role"], let t = d["text"],
+                  let role = ChatRole(rawValue: r) else { return nil }
+            return Line(role: role, text: t)
+        }
     }
 
     /// Lấy toàn bộ nội dung hội thoại (để lưu vào lịch sử chat) rồi xóa khỏi màn hình.
