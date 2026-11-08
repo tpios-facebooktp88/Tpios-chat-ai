@@ -569,7 +569,7 @@ final class LiveVoiceManager: ObservableObject {
             instruction += "\n\nCHẾ ĐỘ HỌC TIẾNG ANH: Khi người dùng nói tiếng Anh, hãy nhẹ nhàng sửa lỗi phát âm/ngữ pháp nếu có, giải thích ngắn gọn, rồi tiếp tục hội thoại tự nhiên. Khuyến khích người dùng nói tiếng Anh nhiều hơn."
         }
         if !lines.isEmpty {
-            let recent = lines.suffix(12).map { line -> String in
+            let recent = lines.suffix(30).map { line -> String in
                 let who = line.role == .user ? "Người dùng" : "Bạn"
                 return "\(who): \(line.text)"
             }.joined(separator: "\n")
