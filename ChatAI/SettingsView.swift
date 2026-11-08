@@ -144,8 +144,16 @@ struct VoiceRoleSettingsView: View {
     @AppStorage("live_barge_in")      var bargeIn: Bool       = false
     @AppStorage("englishLearningMode") var englishMode: Bool  = false
 
-    // Keyboard dismiss + scroll-to-editor
-    @FocusState private var editorFocused: Bool
+    // Lily prompts — lưu riêng từng cái
+    @AppStorage("persona_lily_1") var lily1: String = LivePersona.lilyDefaults[0]
+    @AppStorage("persona_lily_2") var lily2: String = LivePersona.lilyDefaults[1]
+    @AppStorage("persona_lily_3") var lily3: String = LivePersona.lilyDefaults[2]
+    @AppStorage("persona_lily_4") var lily4: String = LivePersona.lilyDefaults[3]
+
+    @State private var expandedIdx: Int? = nil   // index Lily đang mở edit
+    @State private var draftPrompts: [String] = ["", "", "", ""]
+
+    @FocusState private var focusedField: Int?
 
     var body: some View {
         ZStack {
@@ -197,75 +205,21 @@ struct VoiceRoleSettingsView: View {
                         .font(.caption).foregroundColor(theme.textSec)
                         .padding(.horizontal, 20).padding(.bottom, 8)
 
-                    // ── Vai diễn preset ───────────────────────────────
+                    // ── Vai diễn Lily ─────────────────────────────────
                     sectionHeader("VAI DIỄN AI")
                     VStack(spacing: 0) {
-                        ForEach(Array(LivePersona.presets.enumerated()), id: \.element.id) { idx, preset in
-                            Button {
-                                persona = preset.text
-                                editorFocused = false
-                            } label: {
-                                HStack {
-                                    Text(preset.id)
-                                        .foregroundColor(persona == preset.text ? theme.accent : theme.textPri)
-                                    Spacer()
-                                    if persona == preset.text {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(theme.accent)
-                                    }
-                                }
-                                .padding()
-                            }
-                            if idx < LivePersona.presets.count - 1 {
-                                Divider().background(theme.divider)
-                            }
+                        ForEach(0..<4) { idx in
+                            lilyRow(idx: idx)
+                            if idx < 3 { Divider().background(theme.divider) }
                         }
                     }
                     .background(theme.surface).cornerRadius(14).padding(.horizontal)
-
-                    // ── Tuỳ chỉnh vai diễn (không dùng TextEditor trong Form) ──
-                    sectionHeader("NỘI DUNG VAI DIỄN")
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Nội dung được lưu tự động và dùng cho cả chat chữ lẫn gọi thoại")
-                            .font(.caption).foregroundColor(theme.textSec)
-
-                        TextEditor(text: $persona)
-                            .focused($editorFocused)
-                            .frame(minHeight: 160)
-                            .font(.system(size: 14))
-                            .foregroundColor(theme.textPri)
-                            .scrollContentBackground(.hidden)
-                            .background(theme.bg)
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(editorFocused ? theme.accent : theme.divider, lineWidth: 1.5)
-                            )
-
-                        // Nút ẩn bàn phím + xác nhận lưu
-                        if editorFocused {
-                            Button {
-                                editorFocused = false
-                            } label: {
-                                Label("Xong — đã lưu", systemImage: "checkmark.circle.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(theme.accent)
-                                    .cornerRadius(10)
-                            }
-                        }
-                    }
-                    .padding()
-                    .background(theme.surface).cornerRadius(14)
-                    .padding(.horizontal)
                     .padding(.bottom, 32)
                 }
                 .padding(.top, 16)
             }
             // Chạm ngoài editor thì ẩn bàn phím
-            .onTapGesture { editorFocused = false }
+            .onTapGesture { focusedField = nil }
         }
         .navigationTitle("Giọng nói & Vai trò")
         .navigationBarTitleDisplayMode(.inline)
@@ -273,8 +227,114 @@ struct VoiceRoleSettingsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Xong") { editorFocused = false }
+                Button("Xong") { focusedField = nil }
                     .foregroundColor(theme.accent)
+            }
+        }
+    }
+
+    // Lấy / set prompt theo index
+    private func lilyPrompt(_ idx: Int) -> String {
+        switch idx {
+        case 0: return lily1; case 1: return lily2
+        case 2: return lily3; default: return lily4
+        }
+    }
+    private func saveLily(_ idx: Int, _ text: String) {
+        switch idx {
+        case 0: lily1 = text; case 1: lily2 = text
+        case 2: lily3 = text; default: lily4 = text
+        }
+    }
+
+    @ViewBuilder
+    private func lilyRow(idx: Int) -> some View {
+        let name = LivePersona.lilyNames[idx]
+        let isActive = persona == lilyPrompt(idx)
+        let isExpanded = expandedIdx == idx
+
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row — nhấn để chọn vai
+            Button {
+                persona = lilyPrompt(idx)
+                focusedField = nil
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    expandedIdx = isExpanded ? nil : idx
+                    if expandedIdx == idx { draftPrompts[idx] = lilyPrompt(idx) }
+                }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name)
+                            .foregroundColor(isActive ? theme.accent : theme.textPri)
+                            .font(.system(size: 15))
+                        if isActive {
+                            Text("Đang dùng")
+                                .font(.caption2).foregroundColor(theme.accent.opacity(0.8))
+                        }
+                    }
+                    Spacer()
+                    if isActive {
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(theme.accent)
+                    }
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption).foregroundColor(theme.textSec)
+                        .padding(.leading, 4)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+            }
+
+            // Expanded: edit prompt + nút Lưu
+            if isExpanded {
+                Divider().background(theme.divider)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Prompt vai diễn:")
+                        .font(.caption).foregroundColor(theme.textSec)
+                        .padding(.top, 4)
+
+                    TextEditor(text: $draftPrompts[idx])
+                        .focused($focusedField, equals: idx)
+                        .frame(minHeight: 130)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textPri)
+                        .scrollContentBackground(.hidden)
+                        .background(theme.bg)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(focusedField == idx ? theme.accent : theme.divider, lineWidth: 1.5)
+                        )
+                        .onAppear { draftPrompts[idx] = lilyPrompt(idx) }
+
+                    HStack(spacing: 8) {
+                        // Reset về default
+                        Button {
+                            draftPrompts[idx] = LivePersona.lilyDefaults[idx]
+                        } label: {
+                            Text("Reset")
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.textSec)
+                                .padding(.vertical, 8).padding(.horizontal, 14)
+                                .background(theme.bg).cornerRadius(8)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.divider, lineWidth: 1))
+                        }
+                        // Lưu
+                        Button {
+                            saveLily(idx, draftPrompts[idx])
+                            if isActive { persona = draftPrompts[idx] }
+                            focusedField = nil
+                            withAnimation { expandedIdx = nil }
+                        } label: {
+                            Label("Lưu", systemImage: "checkmark.circle.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(theme.accent).cornerRadius(8)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12).padding(.bottom, 12)
             }
         }
     }
