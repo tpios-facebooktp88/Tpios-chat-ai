@@ -879,6 +879,47 @@ struct LiveCallButton: View {
     }
 }
 
+// MARK: - Text input bar (tách riêng để tránh re-render LiveCallView khi gõ)
+
+private struct LiveTextInputBar: View {
+    let onSend: (String) -> Void
+    @State private var text: String = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("Gõ tin nhắn...", text: $text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(white: 0.15))
+                .cornerRadius(20)
+                .foregroundColor(.white)
+                .focused($focused)
+                .submitLabel(.send)
+                .onSubmit { send() }
+
+            Button(action: send) {
+                Image(systemName: "paperplane.fill")
+                    .foregroundColor(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? Color(white: 0.4)
+                        : Color(red: 1, green: 0.34, blue: 0.13))
+                    .font(.system(size: 18))
+                    .padding(8)
+            }
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
+    }
+
+    private func send() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        text = ""
+        onSend(trimmed)
+    }
+}
+
 // MARK: - Màn hình gọi
 
 struct LiveCallView: View {
@@ -889,10 +930,6 @@ struct LiveCallView: View {
     @AppStorage("live_voice") private var voice: String = "Zephyr"
     @AppStorage("live_persona") private var persona: String = LivePersona.defaultText
     @AppStorage("live_barge_in") private var bargeIn: Bool = false
-
-    @State private var typedText: String = ""
-    @FocusState private var inputFocused: Bool
-
 
     var body: some View {
         NavigationStack {
@@ -1046,37 +1083,9 @@ struct LiveCallView: View {
 
     @ViewBuilder
     private var textInputBar: some View {
-        HStack(spacing: 8) {
-            TextField("Gõ tin nhắn...", text: $typedText)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(white: 0.15))
-                .cornerRadius(20)
-                .foregroundColor(.white)
-                .focused($inputFocused)
-                .submitLabel(.send)
-                .onSubmit { sendTyped() }
-
-            Button(action: sendTyped) {
-                Image(systemName: "paperplane.fill")
-                    .foregroundColor(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? Color(white: 0.4)
-                        : Color(red: 1, green: 0.34, blue: 0.13))
-                    .font(.system(size: 18))
-                    .padding(8)
-            }
-            .disabled(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 8)
-    }
-
-    private func sendTyped() {
-        let text = typedText
-        typedText = ""
-        Task { @MainActor in
-            manager.sendTextMessage(text)
-        }
+        LiveTextInputBar(onSend: { text in
+            Task { @MainActor in manager.sendTextMessage(text) }
+        })
     }
 
     private var statusText: String {
