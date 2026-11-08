@@ -503,6 +503,8 @@ struct HistoryTabView: View {
     @ObservedObject private var historyMgr = HistoryManager.shared
     @State private var renameSession: ChatSession?
     @State private var newTitle = ""
+    @StateObject private var liveManager = LiveVoiceManager()
+    @State private var showLiveResume = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -538,21 +540,43 @@ struct HistoryTabView: View {
             } else {
                 List {
                     ForEach(historyMgr.sessions) { session in
+                        let isVoice = session.provider == "live_voice"
                         Button {
-                            viewModel.load(session: session)
+                            if isVoice {
+                                let lines = session.messages.map {
+                                    LiveVoiceManager.Line(role: $0.role, text: $0.content)
+                                }
+                                liveManager.preloadLines(lines)
+                                showLiveResume = true
+                            } else {
+                                viewModel.load(session: session)
+                            }
                         } label: {
                             HStack(spacing: 12) {
-                                Image("companion_neutral")
-                                    .resizable().scaledToFill()
-                                    .frame(width: 40, height: 40)
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(theme.accent.opacity(0.5), lineWidth: 1))
+                                ZStack {
+                                    Image("companion_neutral")
+                                        .resizable().scaledToFill()
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(theme.accent.opacity(0.5), lineWidth: 1))
+                                    if isVoice {
+                                        Image(systemName: "waveform.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(Color(red:1,green:0.34,blue:0.13))
+                                            .offset(x: 12, y: 12)
+                                    }
+                                }
 
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(session.title)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(theme.textPri)
-                                        .lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        if isVoice {
+                                            Text("🎙️").font(.system(size: 11))
+                                        }
+                                        Text(session.title)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(theme.textPri)
+                                            .lineLimit(1)
+                                    }
                                     Text(session.preview)
                                         .font(.system(size: 12))
                                         .foregroundColor(theme.textSec)
@@ -561,9 +585,16 @@ struct HistoryTabView: View {
 
                                 Spacer()
 
-                                Text(session.updatedAt, style: .relative)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(theme.textSec)
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text(session.updatedAt, style: .relative)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(theme.textSec)
+                                    if isVoice {
+                                        Text("Tiếp tục")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundColor(Color(red:1,green:0.34,blue:0.13))
+                                    }
+                                }
                             }
                             .padding(.vertical, 4)
                         }
@@ -597,6 +628,9 @@ struct HistoryTabView: View {
             Button("Hủy", role: .cancel) { renameSession = nil }
         }
         .onAppear { historyMgr.loadSessions() }
+        .sheet(isPresented: $showLiveResume) {
+            LiveCallView(manager: liveManager)
+        }
     }
 }
 

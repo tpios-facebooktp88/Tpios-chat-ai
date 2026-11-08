@@ -78,9 +78,6 @@ struct SettingsTabView: View {
                                 .font(.system(size: 12))
                                 .foregroundColor(theme.textSec)
                         }
-                        NavigationLink { HistoryListView() } label: {
-                            settingsRow("clock", "Lịch sử chat")
-                        }
                     } header: { sectionHeader("person.crop.circle", "TÀI KHOẢN") }
                     .listRowBackground(theme.surface)
 

@@ -800,6 +800,13 @@ final class LiveVoiceManager: ObservableObject {
         teardown()
     }
 
+    /// Inject context từ session cũ trước khi start (để AI nhớ lại)
+    func preloadLines(_ newLines: [Line]) {
+        lines = newLines
+        openUser = nil
+        openAI = nil
+    }
+
     /// Gửi text message vào session đang live (không dùng mic)
     @MainActor func sendTextMessage(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -880,24 +887,21 @@ struct LiveCallButton: View {
     private func finishCall() {
         manager.end()
         let transcript = manager.takeTranscript()
-        var added = false
-        for line in transcript {
+        let messages = transcript.compactMap { line -> ChatMessage? in
             let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if text.isEmpty { continue }
-            viewModel.messages.append(ChatMessage(role: line.role, content: text))
-            added = true
+            guard !text.isEmpty else { return nil }
+            return ChatMessage(role: line.role, content: text)
         }
-        if added {
-            viewModel.saveCurrentSession()
-            // Extract memory từ những gì user nói trong cuộc gọi (dùng lại logic của ChatViewModel)
-            let userLines = transcript
-                .filter { $0.role == .user }
-                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ". ")
-            if !userLines.isEmpty {
-                Task { await viewModel.extractMemoryFromVoice(userLines) }
-            }
+        guard !messages.isEmpty else { return }
+
+        // Lưu thành session voice riêng
+        let session = ChatSession(title: "", provider: "live_voice", messages: messages)
+        HistoryManager.shared.save(session: session)
+
+        // Extract memory từ những gì user nói
+        let userLines = messages.filter { $0.role == .user }.map { $0.content }.joined(separator: ". ")
+        if !userLines.isEmpty {
+            Task { await viewModel.extractMemoryFromVoice(userLines) }
         }
     }
 }
