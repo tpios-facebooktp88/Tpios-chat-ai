@@ -141,14 +141,17 @@ struct VoiceRoleSettingsView: View {
     @AppStorage("live_barge_in")      var bargeIn: Bool       = false
     @AppStorage("englishLearningMode") var englishMode: Bool  = false
 
-    // Lily prompts — lưu riêng từng cái
+    // Vai diễn prompts — lưu riêng từng cái
     @AppStorage("persona_lily_1") var lily1: String = LivePersona.lilyDefaults[0]
     @AppStorage("persona_lily_2") var lily2: String = LivePersona.lilyDefaults[1]
     @AppStorage("persona_lily_3") var lily3: String = LivePersona.lilyDefaults[2]
     @AppStorage("persona_lily_4") var lily4: String = LivePersona.lilyDefaults[3]
+    @AppStorage("persona_lily_5") var lily5: String = LivePersona.lilyDefaults[4]
+    @AppStorage("persona_lily_6") var lily6: String = LivePersona.lilyDefaults[5]
+    @AppStorage("persona_lily_7") var lily7: String = LivePersona.lilyDefaults[6]
 
-    @State private var expandedIdx: Int? = nil   // index Lily đang mở edit
-    @State private var draftPrompts: [String] = ["", "", "", ""]
+    @State private var expandedIdx: Int? = nil
+    @State private var draftPrompts: [String] = Array(repeating: "", count: 7)
 
     @FocusState private var focusedField: Int?
 
@@ -205,9 +208,9 @@ struct VoiceRoleSettingsView: View {
                     // ── Vai diễn Lily ─────────────────────────────────
                     sectionHeader("VAI DIỄN AI")
                     VStack(spacing: 0) {
-                        ForEach(0..<4) { idx in
+                        ForEach(0..<7) { idx in
                             lilyRow(idx: idx)
-                            if idx < 3 { Divider().background(theme.divider) }
+                            if idx < 6 { Divider().background(theme.divider) }
                         }
                     }
                     .background(theme.surface).cornerRadius(14).padding(.horizontal)
@@ -233,14 +236,16 @@ struct VoiceRoleSettingsView: View {
     // Lấy / set prompt theo index
     private func lilyPrompt(_ idx: Int) -> String {
         switch idx {
-        case 0: return lily1; case 1: return lily2
-        case 2: return lily3; default: return lily4
+        case 0: return lily1; case 1: return lily2; case 2: return lily3
+        case 3: return lily4; case 4: return lily5; case 5: return lily6
+        default: return lily7
         }
     }
     private func saveLily(_ idx: Int, _ text: String) {
         switch idx {
-        case 0: lily1 = text; case 1: lily2 = text
-        case 2: lily3 = text; default: lily4 = text
+        case 0: lily1 = text; case 1: lily2 = text; case 2: lily3 = text
+        case 3: lily4 = text; case 4: lily5 = text; case 5: lily6 = text
+        default: lily7 = text
         }
     }
 
