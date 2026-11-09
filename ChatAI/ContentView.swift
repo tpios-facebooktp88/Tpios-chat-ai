@@ -46,7 +46,7 @@ struct ContentView: View {
             Group {
                 switch selectedTab {
                 case 0: ChatTabView(viewModel: viewModel, voiceManager: voiceManager)
-                case 1: HistoryTabView(viewModel: viewModel)
+                case 1: HistoryTabView(viewModel: viewModel, selectedTab: $selectedTab)
                 case 2: MemoryTabView()
                 case 3: SettingsTabView()
                 default: EmptyView()
@@ -500,6 +500,7 @@ struct TypingIndicator: View {
 struct HistoryTabView: View {
     @EnvironmentObject var theme: ThemeManager
     @ObservedObject var viewModel: ChatViewModel
+    @Binding var selectedTab: Int
     @ObservedObject private var historyMgr = HistoryManager.shared
     @State private var renameSession: ChatSession?
     @State private var newTitle = ""
@@ -516,6 +517,7 @@ struct HistoryTabView: View {
                 Spacer()
                 Button {
                     viewModel.startNewChat()
+                    selectedTab = 0
                 } label: {
                     Image(systemName: "square.and.pencil")
                         .foregroundColor(theme.accent)
@@ -619,13 +621,35 @@ struct HistoryTabView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .alert("Đổi tên", isPresented: .init(get: { renameSession != nil }, set: { if !$0 { renameSession = nil } })) {
-            TextField("Tên mới", text: $newTitle)
-            Button("Lưu") {
-                if let s = renameSession { historyMgr.rename(session: s, newTitle: newTitle) }
-                renameSession = nil
+        .sheet(item: $renameSession) { session in
+            NavigationStack {
+                VStack(spacing: 16) {
+                    TextField("Tên mới", text: $newTitle)
+                        .padding(12)
+                        .background(theme.surface)
+                        .cornerRadius(10)
+                        .foregroundColor(theme.textPri)
+                        .font(.system(size: 15))
+                    Spacer()
+                }
+                .padding()
+                .background(theme.bg.ignoresSafeArea())
+                .navigationTitle("Đổi tên")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Hủy") { renameSession = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Lưu") {
+                            historyMgr.rename(session: session, newTitle: newTitle)
+                            renameSession = nil
+                        }.foregroundColor(theme.accent)
+                    }
+                }
+                .preferredColorScheme(.dark)
             }
-            Button("Hủy", role: .cancel) { renameSession = nil }
+            .presentationDetents([.height(160)])
         }
         .onAppear { historyMgr.loadSessions() }
         .sheet(isPresented: $showLiveResume) {
