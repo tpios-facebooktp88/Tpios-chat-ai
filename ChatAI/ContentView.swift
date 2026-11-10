@@ -506,6 +506,7 @@ struct HistoryTabView: View {
     @State private var newTitle = ""
     @StateObject private var liveManager = LiveVoiceManager()
     @State private var showLiveResume = false
+    @State private var resumingSession: ChatSession?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -517,6 +518,7 @@ struct HistoryTabView: View {
                 Spacer()
                 Button {
                     liveManager.preloadLines([])
+                    resumingSession = nil
                     showLiveResume = true
                 } label: {
                     Image(systemName: "square.and.pencil")
@@ -549,6 +551,7 @@ struct HistoryTabView: View {
                                     LiveVoiceManager.Line(role: $0.role, text: $0.content)
                                 }
                                 liveManager.preloadLines(lines)
+                                resumingSession = session
                                 showLiveResume = true
                             } else {
                                 viewModel.load(session: session)
@@ -660,9 +663,17 @@ struct HistoryTabView: View {
                 guard !text.isEmpty else { return nil }
                 return ChatMessage(role: line.role, content: text)
             }
-            guard !messages.isEmpty else { return }
-            let session = ChatSession(title: "", provider: "live_voice", messages: messages)
-            HistoryManager.shared.save(session: session)
+            guard !messages.isEmpty else { resumingSession = nil; return }
+            if var existing = resumingSession {
+                // Resume: update session gốc với toàn bộ transcript (cũ + mới)
+                existing.messages = messages
+                HistoryManager.shared.save(session: existing)
+            } else {
+                // Chat mới: tạo session mới
+                let session = ChatSession(title: "", provider: "live_voice", messages: messages)
+                HistoryManager.shared.save(session: session)
+            }
+            resumingSession = nil
         }) {
             LiveCallView(manager: liveManager)
         }
