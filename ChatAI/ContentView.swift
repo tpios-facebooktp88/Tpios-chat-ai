@@ -652,7 +652,18 @@ struct HistoryTabView: View {
             .presentationDetents([.height(160)])
         }
         .onAppear { historyMgr.loadSessions() }
-        .sheet(isPresented: $showLiveResume) {
+        .sheet(isPresented: $showLiveResume, onDismiss: {
+            liveManager.end()
+            let transcript = liveManager.takeTranscript()
+            let messages = transcript.compactMap { line -> ChatMessage? in
+                let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return nil }
+                return ChatMessage(role: line.role, content: text)
+            }
+            guard !messages.isEmpty else { return }
+            let session = ChatSession(title: "", provider: "live_voice", messages: messages)
+            HistoryManager.shared.save(session: session)
+        }) {
             LiveCallView(manager: liveManager)
         }
     }
