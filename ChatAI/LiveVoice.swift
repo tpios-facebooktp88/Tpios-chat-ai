@@ -464,6 +464,7 @@ final class LiveVoiceManager: ObservableObject {
 
     @Published var state: CallState = .idle
     @Published var lines: [Line] = []
+    private var preloaded = false
     @Published var aiSpeaking = false
     @Published var errorText: String?
     @Published var events: [String] = []
@@ -526,7 +527,8 @@ final class LiveVoiceManager: ObservableObject {
         openUser = nil
         openAI = nil
         events = []
-        if lines.isEmpty { loadTranscript() }
+        if !preloaded { loadTranscript() }
+        preloaded = false
         seenKinds = []
         micStats = LiveMicStats()
         serverMessages = 0
@@ -811,6 +813,7 @@ final class LiveVoiceManager: ObservableObject {
         lines = newLines
         openUser = nil
         openAI = nil
+        preloaded = true
     }
 
     /// Gửi text message vào session đang live (không dùng mic)
