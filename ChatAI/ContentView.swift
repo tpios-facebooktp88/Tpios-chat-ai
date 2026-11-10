@@ -516,8 +516,8 @@ struct HistoryTabView: View {
                     .foregroundColor(theme.textPri)
                 Spacer()
                 Button {
-                    viewModel.startNewChat()
-                    selectedTab = 0
+                    liveManager.preloadLines([])
+                    showLiveResume = true
                 } label: {
                     Image(systemName: "square.and.pencil")
                         .foregroundColor(theme.accent)

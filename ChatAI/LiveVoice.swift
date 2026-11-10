@@ -526,7 +526,7 @@ final class LiveVoiceManager: ObservableObject {
         openUser = nil
         openAI = nil
         events = []
-        loadTranscript()
+        if lines.isEmpty { loadTranscript() }
         seenKinds = []
         micStats = LiveMicStats()
         serverMessages = 0
