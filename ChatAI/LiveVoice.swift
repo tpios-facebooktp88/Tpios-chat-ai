@@ -1178,55 +1178,51 @@ struct LiveLineRow: View {
 
 private struct LEDBorderView: View {
     let isActive: Bool
-    @State private var angle: Double = 0
+    @State private var startDate = Date()
+    private let period: Double = 6.0  // giây / 1 vòng
 
     // Dải màu ngắn, đuôi mờ dần, đầu trắng sáng
     private let stops: [Gradient.Stop] = [
-        .init(color: .clear,                                          location: 0.00),
-        .init(color: .clear,                                          location: 0.72),
-        .init(color: Color(red: 0.0, green: 0.5, blue: 1.0).opacity(0.4), location: 0.78),
-        .init(color: Color(red: 0.6, green: 0.0, blue: 1.0).opacity(0.6), location: 0.84),
-        .init(color: Color(red: 1.0, green: 0.2, blue: 0.4).opacity(0.8), location: 0.90),
-        .init(color: Color(red: 1.0, green: 0.9, blue: 0.2),          location: 0.96),
-        .init(color: Color.white,                                     location: 0.99), // đầu LED
-        .init(color: .clear,                                          location: 1.00),
+        .init(color: .clear,                                               location: 0.00),
+        .init(color: .clear,                                               location: 0.74),
+        .init(color: Color(red: 0.0, green: 0.5, blue: 1.0).opacity(0.35), location: 0.80),
+        .init(color: Color(red: 0.6, green: 0.0, blue: 1.0).opacity(0.60), location: 0.86),
+        .init(color: Color(red: 1.0, green: 0.2, blue: 0.4).opacity(0.80), location: 0.92),
+        .init(color: Color(red: 1.0, green: 0.9, blue: 0.2),               location: 0.97),
+        .init(color: Color.white,                                          location: 0.995),
+        .init(color: .clear,                                               location: 1.00),
     ]
 
-    // Chỉ glow tại đầu LED (vùng trắng/vàng), tail không glow
+    // Glow chỉ ở đầu LED
     private let glowStops: [Gradient.Stop] = [
-        .init(color: .clear,                                          location: 0.00),
-        .init(color: .clear,                                          location: 0.90),
-        .init(color: Color(red: 1.0, green: 0.9, blue: 0.4).opacity(0.6), location: 0.96),
-        .init(color: Color.white.opacity(0.9),                        location: 0.99),
-        .init(color: .clear,                                          location: 1.00),
+        .init(color: .clear,                                               location: 0.00),
+        .init(color: .clear,                                               location: 0.92),
+        .init(color: Color(red: 1.0, green: 0.9, blue: 0.4).opacity(0.55), location: 0.97),
+        .init(color: Color.white.opacity(0.85),                            location: 0.995),
+        .init(color: .clear,                                               location: 1.00),
     ]
 
     var body: some View {
-        let grad     = AngularGradient(stops: stops,     center: .center,
-                                       startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
-        let glowGrad = AngularGradient(stops: glowStops, center: .center,
-                                       startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
-        ZStack {
-            // Ánh sáng chỉ ở đầu LED
-            Rectangle()
-                .stroke(glowGrad, lineWidth: 14)
-                .blur(radius: 10)
-                .opacity(isActive ? 0.85 : 0.0)
-            // Viền dải màu sắc nét
-            Rectangle()
-                .stroke(grad, lineWidth: 2.5)
-                .opacity(isActive ? 1.0 : 0.0)
+        TimelineView(.animation(minimumInterval: 1/60)) { tl in
+            let elapsed = tl.date.timeIntervalSince(startDate)
+            let angle   = (elapsed.truncatingRemainder(dividingBy: period) / period) * 360.0
+
+            let grad     = AngularGradient(stops: stops,     center: .center,
+                                           startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+            let glowGrad = AngularGradient(stops: glowStops, center: .center,
+                                           startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+            ZStack {
+                Rectangle()
+                    .stroke(glowGrad, lineWidth: 14)
+                    .blur(radius: 10)
+                    .opacity(isActive ? 0.85 : 0.0)
+                Rectangle()
+                    .stroke(grad, lineWidth: 2.5)
+                    .opacity(isActive ? 1.0 : 0.0)
+            }
         }
         .allowsHitTesting(false)
-        .onAppear { startAnim() }
-        .onChange(of: isActive) { _ in startAnim() }
-    }
-
-    private func startAnim() {
-        angle = 0
-        withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
-            angle = 360
-        }
+        .onAppear { startDate = Date() }
     }
 }
 
