@@ -1070,7 +1070,7 @@ struct LiveCallView: View {
             }
         }
         .frame(height: UIScreen.main.bounds.height * 0.52)
-        .overlay(LEDBorderView(isActive: manager.aiSpeaking))
+        .overlay(LEDBorderView(isActive: manager.state == .live))
     }
 
     @ViewBuilder
@@ -1180,31 +1180,39 @@ private struct LEDBorderView: View {
     let isActive: Bool
     @State private var angle: Double = 0
 
+    // Dải màu ngắn, đuôi mờ dần, đầu trắng sáng
     private let stops: [Gradient.Stop] = [
-        .init(color: .clear,                                location: 0.00),
-        .init(color: .clear,                                location: 0.48),
-        .init(color: Color(red: 0.0, green: 0.5, blue: 1.0), location: 0.55),
-        .init(color: Color(red: 0.5, green: 0.0, blue: 1.0), location: 0.64),
-        .init(color: Color(red: 1.0, green: 0.0, blue: 0.5), location: 0.73),
-        .init(color: Color(red: 1.0, green: 0.4, blue: 0.0), location: 0.82),
-        .init(color: Color(red: 1.0, green: 1.0, blue: 0.0), location: 0.90),
-        .init(color: Color.white,                           location: 0.96),  // đầu LED sáng nhất
-        .init(color: .clear,                                location: 1.00),
+        .init(color: .clear,                                          location: 0.00),
+        .init(color: .clear,                                          location: 0.72),
+        .init(color: Color(red: 0.0, green: 0.5, blue: 1.0).opacity(0.4), location: 0.78),
+        .init(color: Color(red: 0.6, green: 0.0, blue: 1.0).opacity(0.6), location: 0.84),
+        .init(color: Color(red: 1.0, green: 0.2, blue: 0.4).opacity(0.8), location: 0.90),
+        .init(color: Color(red: 1.0, green: 0.9, blue: 0.2),          location: 0.96),
+        .init(color: Color.white,                                     location: 0.99), // đầu LED
+        .init(color: .clear,                                          location: 1.00),
+    ]
+
+    // Chỉ glow tại đầu LED (vùng trắng/vàng), tail không glow
+    private let glowStops: [Gradient.Stop] = [
+        .init(color: .clear,                                          location: 0.00),
+        .init(color: .clear,                                          location: 0.90),
+        .init(color: Color(red: 1.0, green: 0.9, blue: 0.4).opacity(0.6), location: 0.96),
+        .init(color: Color.white.opacity(0.9),                        location: 0.99),
+        .init(color: .clear,                                          location: 1.00),
     ]
 
     var body: some View {
-        let grad = AngularGradient(
-            stops: stops, center: .center,
-            startAngle: .degrees(angle),
-            endAngle:   .degrees(angle + 360)
-        )
+        let grad     = AngularGradient(stops: stops,     center: .center,
+                                       startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+        let glowGrad = AngularGradient(stops: glowStops, center: .center,
+                                       startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
         ZStack {
-            // Lớp glow mờ
+            // Ánh sáng chỉ ở đầu LED
             Rectangle()
-                .stroke(grad, lineWidth: 12)
-                .blur(radius: 8)
-                .opacity(isActive ? 0.80 : 0.0)
-            // Lớp viền sắc nét
+                .stroke(glowGrad, lineWidth: 14)
+                .blur(radius: 10)
+                .opacity(isActive ? 0.85 : 0.0)
+            // Viền dải màu sắc nét
             Rectangle()
                 .stroke(grad, lineWidth: 2.5)
                 .opacity(isActive ? 1.0 : 0.0)
@@ -1216,8 +1224,7 @@ private struct LEDBorderView: View {
 
     private func startAnim() {
         angle = 0
-        withAnimation(.linear(duration: isActive ? 1.6 : 3.5)
-                        .repeatForever(autoreverses: false)) {
+        withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
             angle = 360
         }
     }
