@@ -1070,6 +1070,7 @@ struct LiveCallView: View {
             }
         }
         .frame(height: UIScreen.main.bounds.height * 0.52)
+        .overlay(LEDBorderView(isActive: manager.aiSpeaking))
     }
 
     @ViewBuilder
@@ -1173,6 +1174,55 @@ struct LiveLineRow: View {
 }
 
 // MARK: - Thinking dots animation
+// MARK: - LED Border (chasing rainbow khi AI đang nói)
+
+private struct LEDBorderView: View {
+    let isActive: Bool
+    @State private var angle: Double = 0
+
+    private let stops: [Gradient.Stop] = [
+        .init(color: .clear,                                location: 0.00),
+        .init(color: .clear,                                location: 0.48),
+        .init(color: Color(red: 0.0, green: 0.5, blue: 1.0), location: 0.55),
+        .init(color: Color(red: 0.5, green: 0.0, blue: 1.0), location: 0.64),
+        .init(color: Color(red: 1.0, green: 0.0, blue: 0.5), location: 0.73),
+        .init(color: Color(red: 1.0, green: 0.4, blue: 0.0), location: 0.82),
+        .init(color: Color(red: 1.0, green: 1.0, blue: 0.0), location: 0.90),
+        .init(color: Color.white,                           location: 0.96),  // đầu LED sáng nhất
+        .init(color: .clear,                                location: 1.00),
+    ]
+
+    var body: some View {
+        let grad = AngularGradient(
+            stops: stops, center: .center,
+            startAngle: .degrees(angle),
+            endAngle:   .degrees(angle + 360)
+        )
+        ZStack {
+            // Lớp glow mờ
+            Rectangle()
+                .stroke(grad, lineWidth: 12)
+                .blur(radius: 8)
+                .opacity(isActive ? 0.80 : 0.0)
+            // Lớp viền sắc nét
+            Rectangle()
+                .stroke(grad, lineWidth: 2.5)
+                .opacity(isActive ? 1.0 : 0.0)
+        }
+        .allowsHitTesting(false)
+        .onAppear { startAnim() }
+        .onChange(of: isActive) { _ in startAnim() }
+    }
+
+    private func startAnim() {
+        angle = 0
+        withAnimation(.linear(duration: isActive ? 1.6 : 3.5)
+                        .repeatForever(autoreverses: false)) {
+            angle = 360
+        }
+    }
+}
+
 struct ThinkingDotsView: View {
     @State private var phase = 0
     let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
