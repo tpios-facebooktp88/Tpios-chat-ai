@@ -1211,43 +1211,38 @@ private struct LEDBorderView: View {
     ]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1/60)) { tl in
-            let elapsed = tl.date.timeIntervalSince(startDate)
-            let angle   = (elapsed.truncatingRemainder(dividingBy: period) / period) * 360.0
-
-            let grad     = AngularGradient(stops: stops,     center: .center,
-                                           startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
-            let glowGrad = AngularGradient(stops: glowStops, center: .center,
-                                           startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
-            let blink  = abs(sin(elapsed * 5))          // 0 → 1, nhấp nháy rõ
-            let hue    = elapsed.truncatingRemainder(dividingBy: 1.5) / 1.5 * 360
-                       + sin(elapsed * 1.7) * 90      // random-looking hue shift
-            let active = isActive ? 1.0 : 0.0
-            ZStack {
-                // hào quang ngoài — lan rộng mờ
-                Rectangle()
-                    .stroke(glowGrad, lineWidth: 70)
-                    .blur(radius: 50)
-                    .opacity(blink * 0.45 * active)
-                // hào quang giữa — sáng hơn
-                Rectangle()
-                    .stroke(glowGrad, lineWidth: 45)
-                    .blur(radius: 28)
-                    .opacity(blink * 0.85 * active)
-                // hào quang sát — sắc nét
-                Rectangle()
-                    .stroke(glowGrad, lineWidth: 18)
-                    .blur(radius: 10)
-                    .opacity(blink * active)
-                // LED line chính
-                Rectangle()
-                    .stroke(grad, lineWidth: 2.5)
-                    .opacity(active)
+        // Khi không active = render nothing, zero GPU cost
+        if isActive {
+            TimelineView(.animation(minimumInterval: 1/30)) { tl in
+                let elapsed = tl.date.timeIntervalSince(startDate)
+                let angle   = (elapsed.truncatingRemainder(dividingBy: period) / period) * 360.0
+                let grad     = AngularGradient(stops: stops,     center: .center,
+                                               startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+                let glowGrad = AngularGradient(stops: glowStops, center: .center,
+                                               startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+                let blink = abs(sin(elapsed * 5))
+                let hue   = elapsed.truncatingRemainder(dividingBy: 1.5) / 1.5 * 360
+                          + sin(elapsed * 1.7) * 90
+                ZStack {
+                    // hào quang rộng
+                    Rectangle()
+                        .stroke(glowGrad, lineWidth: 45)
+                        .blur(radius: 28)
+                        .opacity(blink * 0.85)
+                    // hào quang sát — sắc nét
+                    Rectangle()
+                        .stroke(glowGrad, lineWidth: 18)
+                        .blur(radius: 10)
+                        .opacity(blink)
+                    // LED line chính
+                    Rectangle()
+                        .stroke(grad, lineWidth: 2.5)
+                }
+                .hueRotation(.degrees(hue))
             }
-            .hueRotation(.degrees(hue))
+            .allowsHitTesting(false)
+            .onAppear { startDate = Date() }
         }
-        .allowsHitTesting(false)
-        .onAppear { startDate = Date() }
     }
 }
 
