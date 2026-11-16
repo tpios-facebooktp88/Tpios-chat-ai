@@ -972,14 +972,6 @@ struct LiveCallView: View {
             ZStack {
                 Color(red: 0.06, green: 0.05, blue: 0.04).ignoresSafeArea()
 
-                // LED border — full screen width, chỉ cao bằng robot face
-                VStack(spacing: 0) {
-                    LEDBorderView(isActive: manager.state == .live)
-                        .frame(height: UIScreen.main.bounds.height * 0.52)
-                    Spacer()
-                }
-                .allowsHitTesting(false)
-
                 VStack(spacing: 0) {
                     // ── Nhân vật: chiếm 55% chiều cao, chạm để bật/tắt ──
                     robotFaceSection
@@ -1078,6 +1070,15 @@ struct LiveCallView: View {
             }
         }
         .frame(height: UIScreen.main.bounds.height * 0.52)
+        .overlay(
+            GeometryReader { geo in
+                let offsetX = geo.frame(in: .global).minX
+                LEDBorderView(isActive: manager.state == .live)
+                    .frame(width: UIScreen.main.bounds.width, height: geo.size.height)
+                    .offset(x: -offsetX)
+            }
+            .allowsHitTesting(false)
+        )
     }
 
     @ViewBuilder
@@ -1226,19 +1227,20 @@ private struct LEDBorderView: View {
                 ZStack {
                     // hào quang rộng
                     Rectangle()
-                        .stroke(glowGrad, lineWidth: 45)
-                        .blur(radius: 28)
+                        .stroke(glowGrad, lineWidth: 40)
+                        .blur(radius: 14)
                         .opacity(blink * 0.85)
-                    // hào quang sát — sắc nét
+                    // hào quang sát
                     Rectangle()
-                        .stroke(glowGrad, lineWidth: 18)
-                        .blur(radius: 10)
+                        .stroke(glowGrad, lineWidth: 16)
+                        .blur(radius: 6)
                         .opacity(blink)
                     // LED line chính
                     Rectangle()
                         .stroke(grad, lineWidth: 2.5)
                 }
                 .hueRotation(.degrees(hue))
+                .drawingGroup()  // Metal GPU — blur nhanh hơn nhiều
             }
             .allowsHitTesting(false)
             .onAppear { startDate = Date() }
