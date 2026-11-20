@@ -516,12 +516,22 @@ final class LiveVoiceManager: ObservableObject {
 
     func start(model: String, voice: String, persona: String, bargeIn: Bool) {
         guard state == .idle else { return }
-        // Ưu tiên key riêng Live Voice, fallback về key Gemini chung
-        let key = (KeychainHelper.read(forKey: "live_voice_api_key")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
-            ? (KeychainHelper.read(forKey: AIProviderKind.gemini.keychainKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            : (KeychainHelper.read(forKey: "live_voice_api_key") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // Ưu tiên active entry từ LiveApiManager, fallback về legacy keys
+        let mgr = LiveApiManager.shared
+        let key: String
+        let effectiveVoice: String
+        if let entry = mgr.activeEntry {
+            key = (KeychainHelper.read(forKey: "live_api_key_\(entry.id)") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            effectiveVoice = entry.selectedVoice.isEmpty ? voice : entry.selectedVoice
+        } else {
+            let legacy = (KeychainHelper.read(forKey: "live_voice_api_key")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+                ? (KeychainHelper.read(forKey: AIProviderKind.gemini.keychainKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                : (KeychainHelper.read(forKey: "live_voice_api_key") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            key = legacy
+            effectiveVoice = voice
+        }
         guard !key.isEmpty else {
-            errorText = "Chưa có API key. Vào Cài đặt → Giọng nói & Vai trò để nhập key Live Voice."
+            errorText = "Chưa có API key. Vào Cài đặt → Giọng nói & Vai trò để thêm API key."
             return
         }
         errorText = nil
@@ -548,7 +558,7 @@ final class LiveVoiceManager: ObservableObject {
                     self.fail("Chưa được cấp quyền micro. Vào Cài đặt iPhone, mục Chat AI, bật Micro.")
                     return
                 }
-                self.connect(key: key, model: model, voice: voice, persona: persona)
+                self.connect(key: key, model: model, voice: effectiveVoice, persona: persona)
             }
         }
     }

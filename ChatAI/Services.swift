@@ -212,4 +212,8 @@ enum KeychainHelper {
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
+    static func delete(forKey key: String) {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: key]
+        SecItemDelete(query as CFDictionary)
+    }
 }

@@ -130,14 +130,88 @@ struct SettingsTabView: View {
     }
 }
 
-// MARK: - Giọng nói & Vai trò (kết hợp cài đặt Gemini Live)
+// MARK: - Live API multi-entry model + manager
 
-// Live Voice API key status
-private enum LiveApiStatus: Equatable {
-    case idle, checking
-    case ok(provider: String, preview: String)
-    case error(String)
+struct LiveApiEntry: Codable, Identifiable, Equatable {
+    var id: String = UUID().uuidString
+    var providerName: String
+    var keyPreview: String
+    var voices: [String]
+    var selectedVoice: String
 }
+
+final class LiveApiManager: ObservableObject {
+    static let shared = LiveApiManager()
+    private let udKey = "live_api_entries_v2"
+    private let activeKey = "live_api_active_id"
+
+    @Published var entries: [LiveApiEntry] = []
+    @Published var activeId: String = ""
+
+    init() { load() }
+
+    var activeEntry: LiveApiEntry? { entries.first { $0.id == activeId } }
+
+    func load() {
+        if let data = UserDefaults.standard.data(forKey: udKey),
+           let list = try? JSONDecoder().decode([LiveApiEntry].self, from: data) {
+            entries = list
+        }
+        activeId = UserDefaults.standard.string(forKey: activeKey) ?? entries.first?.id ?? ""
+    }
+
+    func save() {
+        if let data = try? JSONEncoder().encode(entries) {
+            UserDefaults.standard.set(data, forKey: udKey)
+        }
+        UserDefaults.standard.set(activeId, forKey: activeKey)
+    }
+
+    func add(_ entry: LiveApiEntry, key: String) {
+        KeychainHelper.save(key, forKey: "live_api_key_\(entry.id)")
+        entries.append(entry)
+        if entries.count == 1 { activeId = entry.id }
+        save()
+    }
+
+    func remove(_ entry: LiveApiEntry) {
+        KeychainHelper.delete(forKey: "live_api_key_\(entry.id)")
+        entries.removeAll { $0.id == entry.id }
+        if activeId == entry.id { activeId = entries.first?.id ?? "" }
+        save()
+    }
+
+    func setActive(_ id: String) { activeId = id; save() }
+
+    func updateVoice(_ entryId: String, voice: String) {
+        if let idx = entries.firstIndex(where: { $0.id == entryId }) {
+            entries[idx].selectedVoice = voice
+            save()
+        }
+    }
+
+    static func detectProvider(_ key: String) -> String {
+        if key.hasPrefix("AIza")    { return "Gemini Live" }
+        if key.hasPrefix("sk-ant-") { return "Claude (Anthropic)" }
+        if key.hasPrefix("sk-")     { return "OpenAI Realtime" }
+        if key.hasPrefix("xai-")    { return "Grok (xAI)" }
+        if key.hasPrefix("gsk_")    { return "Groq" }
+        return "Unknown"
+    }
+
+    static func providerIcon(_ provider: String) -> String {
+        switch provider {
+        case "Gemini Live":        return "sparkles"
+        case "OpenAI Realtime":    return "circle.hexagongrid.fill"
+        case "Claude (Anthropic)": return "brain.head.profile"
+        case "Grok (xAI)":         return "bolt.fill"
+        case "Groq":               return "cpu.fill"
+        default:                   return "questionmark.circle"
+        }
+    }
+}
+
+// MARK: - Giọng nói & Vai trò (kết hợp cài đặt Gemini Live)
 
 struct VoiceRoleSettingsView: View {
     @EnvironmentObject var theme: ThemeManager
@@ -147,7 +221,8 @@ struct VoiceRoleSettingsView: View {
     @AppStorage("live_persona")     var persona: String     = LivePersona.defaultText
     @AppStorage("live_barge_in")      var bargeIn: Bool       = false
     @AppStorage("englishLearningMode") var englishMode: Bool  = false
-    @AppStorage("live_api_provider")  var liveApiProvider: String = "Gemini Live"
+    @ObservedObject private var apiMgr = LiveApiManager.shared
+    @State private var showAddApi = false
 
     // Vai diễn prompts — lưu riêng từng cái
     @AppStorage("persona_lily_1") var lily1: String = LivePersona.lilyDefaults[0]
@@ -160,13 +235,7 @@ struct VoiceRoleSettingsView: View {
 
     @State private var expandedIdx: Int? = nil
     @State private var draftPrompts: [String] = Array(repeating: "", count: 7)
-    @State private var liveApiKey: String = KeychainHelper.read(forKey: "live_voice_api_key") ?? ""
-    @State private var showLiveKey = false
-    @State private var liveApiStatus: LiveApiStatus = .idle
-
     @FocusState private var focusedField: Int?
-
-    private let liveProviders = ["Gemini Live", "OpenAI Realtime", "Claude Voice"]
 
     var body: some View {
         ZStack {
@@ -196,16 +265,29 @@ struct VoiceRoleSettingsView: View {
                     .background(theme.surface).cornerRadius(14).padding(.horizontal)
 
                     // ── Gemini Live ───────────────────────────────────
-                    sectionHeader("GEMINI LIVE – GIỌNG NÓI")
+                    sectionHeader("LIVE VOICE – GIỌNG NÓI")
                     VStack(spacing: 0) {
-                        Picker("Giọng Gemini Live", selection: $liveVoice) {
-                            ForEach(LiveVoices.all) { v in
-                                Text("\(v.id) – \(v.hint)").tag(v.id)
+                        if let active = apiMgr.activeEntry, !active.voices.isEmpty {
+                            HStack {
+                                Text("Giọng (\(active.providerName))").foregroundColor(theme.textPri)
+                                Spacer()
+                                Picker("", selection: Binding(
+                                    get: { active.selectedVoice },
+                                    set: { apiMgr.updateVoice(active.id, voice: $0) }
+                                )) {
+                                    ForEach(active.voices, id: \.self) { v in Text(v).tag(v) }
+                                }
+                                .pickerStyle(.menu).foregroundColor(theme.accent)
                             }
+                            .padding()
+                        } else {
+                            Picker("Giọng Gemini Live", selection: $liveVoice) {
+                                ForEach(LiveVoices.all) { v in
+                                    Text("\(v.id) – \(v.hint)").tag(v.id)
+                                }
+                            }
+                            .pickerStyle(.menu).foregroundColor(theme.textPri).padding()
                         }
-                        .pickerStyle(.menu)
-                        .foregroundColor(theme.textPri)
-                        .padding()
                         Divider().background(theme.divider)
                         Toggle("Cho phép ngắt lời (dùng tai nghe)", isOn: $bargeIn)
                             .tint(theme.accent).padding()
@@ -221,96 +303,58 @@ struct VoiceRoleSettingsView: View {
                     // ── API Live Voice ────────────────────────────────
                     sectionHeader("API LIVE VOICE")
                     VStack(spacing: 0) {
-                        // Provider picker
-                        HStack {
-                            Text("Provider").foregroundColor(theme.textPri)
-                            Spacer()
-                            Picker("", selection: $liveApiProvider) {
-                                ForEach(liveProviders, id: \.self) { p in
-                                    Text(p).tag(p)
+                        if apiMgr.entries.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle").foregroundColor(theme.textSec)
+                                Text("Chưa có API key. Nhấn + để thêm.")
+                                    .font(.caption).foregroundColor(theme.textSec)
+                            }
+                            .padding()
+                        } else {
+                            ForEach(apiMgr.entries) { entry in
+                                HStack(spacing: 12) {
+                                    Image(systemName: LiveApiManager.providerIcon(entry.providerName))
+                                        .foregroundColor(theme.accent).frame(width: 24)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.providerName)
+                                            .font(.subheadline).bold().foregroundColor(theme.textPri)
+                                        Text(entry.keyPreview)
+                                            .font(.caption).foregroundColor(theme.textSec)
+                                        if !entry.selectedVoice.isEmpty {
+                                            Text("Giọng: \(entry.selectedVoice)")
+                                                .font(.caption2).foregroundColor(theme.accent)
+                                        }
+                                    }
+                                    Spacer()
+                                    if apiMgr.activeId == entry.id {
+                                        Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                                    }
+                                }
+                                .padding()
+                                .contentShape(Rectangle())
+                                .onTapGesture { apiMgr.setActive(entry.id) }
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) { apiMgr.remove(entry) } label: {
+                                        Label("Xóa", systemImage: "trash")
+                                    }
+                                }
+                                if entry.id != apiMgr.entries.last?.id {
+                                    Divider().background(theme.divider)
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .foregroundColor(theme.accent)
+                            Divider().background(theme.divider)
                         }
-                        .padding()
-                        Divider().background(theme.divider)
-
-                        // API Key input
-                        HStack(spacing: 10) {
-                            Image(systemName: "key.fill")
-                                .foregroundColor(theme.textSec).frame(width: 20)
-                            Group {
-                                if showLiveKey {
-                                    TextField("Nhập API key...", text: $liveApiKey)
-                                } else {
-                                    SecureField("Nhập API key...", text: $liveApiKey)
-                                }
-                            }
-                            .foregroundColor(theme.textPri)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            Button { showLiveKey.toggle() } label: {
-                                Image(systemName: showLiveKey ? "eye.slash" : "eye")
-                                    .foregroundColor(theme.textSec)
-                            }
-                        }
-                        .padding()
-                        Divider().background(theme.divider)
-
-                        // Status badge
-                        HStack {
-                            switch liveApiStatus {
-                            case .idle:
-                                let stored = KeychainHelper.read(forKey: "live_voice_api_key") ?? ""
-                                if stored.isEmpty {
-                                    Label("Chưa có key riêng — đang dùng key Gemini mặc định",
-                                          systemImage: "info.circle")
-                                        .font(.caption).foregroundColor(theme.textSec)
-                                } else {
-                                    Label("Đã lưu · chưa kiểm tra", systemImage: "clock")
-                                        .font(.caption).foregroundColor(theme.textSec)
-                                }
-                            case .checking:
-                                ProgressView().scaleEffect(0.8)
-                                Text("Đang kiểm tra...").font(.caption).foregroundColor(theme.textSec)
-                            case .ok(let provider, let preview):
-                                Label("Đang dùng: \(provider) · \(preview)",
-                                      systemImage: "checkmark.circle.fill")
-                                    .font(.caption).foregroundColor(.green)
-                            case .error(let msg):
-                                Label(msg, systemImage: "xmark.circle.fill")
-                                    .font(.caption).foregroundColor(.red)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal).padding(.vertical, 10)
-                        Divider().background(theme.divider)
-
-                        // Check & Save button
-                        Button {
-                            Task { await checkAndSaveLiveKey() }
-                        } label: {
+                        Button { showAddApi = true } label: {
                             HStack {
-                                Spacer()
-                                if liveApiStatus == .checking {
-                                    ProgressView().scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: "arrow.triangle.2.circlepath")
-                                    Text("Kiểm tra & Lưu")
-                                }
+                                Image(systemName: "plus.circle.fill").foregroundColor(theme.accent)
+                                Text("Thêm API key").foregroundColor(theme.accent)
                                 Spacer()
                             }
-                            .padding(12)
-                            .background(theme.accent.opacity(0.15))
-                            .cornerRadius(10)
+                            .padding()
                         }
-                        .foregroundColor(theme.accent)
-                        .padding()
-                        .disabled(liveApiStatus == .checking)
                     }
                     .background(theme.surface).cornerRadius(14).padding(.horizontal)
-                    Text("Key riêng cho AI Voice. Để trống sẽ dùng key Gemini từ mục API Keys.")
+                    Text("Nhập API key bất kỳ — tự nhận diện nhà cung cấp và danh sách giọng.")
                         .font(.caption).foregroundColor(theme.textSec)
                         .padding(.horizontal, 20).padding(.bottom, 8)
 
@@ -340,26 +384,8 @@ struct VoiceRoleSettingsView: View {
                     .foregroundColor(theme.accent)
             }
         }
-    }
-
-    // Kiểm tra & lưu API key Live Voice
-    private func checkAndSaveLiveKey() async {
-        let key = liveApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else {
-            liveApiStatus = .error("Key không được để trống")
-            return
-        }
-        liveApiStatus = .checking
-        do {
-            // Hiện chỉ Gemini Live support — các provider khác hiển thị tên và lưu key
-            if liveApiProvider == "Gemini Live" {
-                _ = try await GeminiLiveModels.fetch(apiKey: key)
-            }
-            KeychainHelper.save(key, forKey: "live_voice_api_key")
-            let preview = key.prefix(6) + "..." + key.suffix(4)
-            liveApiStatus = .ok(provider: liveApiProvider, preview: String(preview))
-        } catch {
-            liveApiStatus = .error(error.localizedDescription)
+        .sheet(isPresented: $showAddApi) {
+            AddLiveApiSheet(apiMgr: apiMgr).environmentObject(theme)
         }
     }
 
@@ -1051,5 +1077,181 @@ struct ModelPickerView: View {
         isLoading = true; errorText = nil
         do { models = try await fetch() } catch { errorText = error.localizedDescription }
         isLoading = false
+    }
+}
+
+// MARK: - Add Live API Sheet
+
+private struct AddLiveApiSheet: View {
+    @EnvironmentObject var theme: ThemeManager
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var apiMgr: LiveApiManager
+
+    @State private var inputKey = ""
+    @State private var showKey = false
+    @State private var status: AddStatus = .idle
+    @State private var voices: [String] = []
+    @State private var selectedVoice = ""
+
+    enum AddStatus: Equatable {
+        case idle, checking
+        case ready(provider: String)
+        case error(String)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Key input
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Dán API Key vào đây")
+                                .font(.caption).foregroundColor(theme.textSec)
+                            HStack(spacing: 10) {
+                                Image(systemName: "key.fill").foregroundColor(theme.textSec)
+                                Group {
+                                    if showKey {
+                                        TextField("Nhập API key...", text: $inputKey)
+                                    } else {
+                                        SecureField("Nhập API key...", text: $inputKey)
+                                    }
+                                }
+                                .foregroundColor(theme.textPri)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                Button { showKey.toggle() } label: {
+                                    Image(systemName: showKey ? "eye.slash" : "eye")
+                                        .foregroundColor(theme.textSec)
+                                }
+                            }
+                            .padding()
+                            .background(theme.surface)
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+
+                        // Status
+                        if status != .idle {
+                            HStack(spacing: 8) {
+                                switch status {
+                                case .checking:
+                                    ProgressView().scaleEffect(0.8)
+                                    Text("Đang kiểm tra...").font(.caption).foregroundColor(theme.textSec)
+                                case .ready(let p):
+                                    Image(systemName: LiveApiManager.providerIcon(p)).foregroundColor(.green)
+                                    Text("Nhận diện: \(p)").font(.caption).foregroundColor(.green)
+                                case .error(let msg):
+                                    Image(systemName: "xmark.circle.fill").foregroundColor(.red)
+                                    Text(msg).font(.caption).foregroundColor(.red)
+                                default: EmptyView()
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+
+                        // Voice picker
+                        if case .ready = status, !voices.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Chọn giọng")
+                                    .font(.caption).foregroundColor(theme.textSec)
+                                Picker("Giọng", selection: $selectedVoice) {
+                                    ForEach(voices, id: \.self) { v in Text(v).tag(v) }
+                                }
+                                .pickerStyle(.wheel)
+                                .background(theme.surface)
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                        }
+
+                        // Check button
+                        Button {
+                            Task { await checkKey() }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if status == .checking {
+                                    ProgressView().scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "magnifyingglass")
+                                    Text("Kiểm tra key")
+                                }
+                                Spacer()
+                            }
+                            .padding(12)
+                            .background(theme.accent.opacity(0.15))
+                            .cornerRadius(10)
+                        }
+                        .foregroundColor(theme.accent)
+                        .padding(.horizontal)
+                        .disabled(inputKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || status == .checking)
+
+                        // Save button
+                        if case .ready(let p) = status {
+                            Button { saveEntry(provider: p); dismiss() } label: {
+                                HStack {
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Lưu API Key")
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(Color.green.opacity(0.2))
+                                .cornerRadius(10)
+                            }
+                            .foregroundColor(.green)
+                            .padding(.horizontal)
+                        }
+                    }
+                    .padding(.top, 20)
+                }
+            }
+            .navigationTitle("Thêm API Key")
+            .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.dark)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Huỷ") { dismiss() }.foregroundColor(theme.accent)
+                }
+            }
+        }
+    }
+
+    private func checkKey() async {
+        let key = inputKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        status = .checking
+        let provider = LiveApiManager.detectProvider(key)
+        do {
+            switch provider {
+            case "Gemini Live":
+                _ = try await GeminiLiveModels.fetch(apiKey: key)
+                voices = LiveVoices.all.map { $0.id }
+            case "OpenAI Realtime":
+                var req = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
+                req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+                let (_, resp) = try await URLSession.shared.data(for: req)
+                guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+                    throw URLError(.userAuthenticationRequired)
+                }
+                voices = ["alloy", "echo", "shimmer", "nova", "onyx", "fable", "coral"]
+            default:
+                voices = []  // unknown provider — save without validation
+            }
+            selectedVoice = voices.first ?? ""
+            status = .ready(provider: provider)
+        } catch {
+            status = .error(error.localizedDescription)
+        }
+    }
+
+    private func saveEntry(provider: String) {
+        let key = inputKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preview = String(key.prefix(8)) + "..." + String(key.suffix(4))
+        let entry = LiveApiEntry(providerName: provider, keyPreview: preview,
+                                 voices: voices, selectedVoice: selectedVoice)
+        apiMgr.add(entry, key: key)
     }
 }
