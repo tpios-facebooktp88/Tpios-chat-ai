@@ -1092,6 +1092,9 @@ private struct AddLiveApiSheet: View {
     @State private var status: AddStatus = .idle
     @State private var voices: [String] = []
     @State private var selectedVoice = ""
+    @State private var manualProvider = "Gemini Live"
+
+    private let knownProviders = ["Gemini Live", "OpenAI Realtime", "Claude (Anthropic)", "Grok (xAI)", "Groq"]
 
     enum AddStatus: Equatable {
         case idle, checking
@@ -1140,8 +1143,9 @@ private struct AddLiveApiSheet: View {
                                     ProgressView().scaleEffect(0.8)
                                     Text("Đang kiểm tra...").font(.caption).foregroundColor(theme.textSec)
                                 case .ready(let p):
-                                    Image(systemName: LiveApiManager.providerIcon(p)).foregroundColor(.green)
-                                    Text("Nhận diện: \(p)").font(.caption).foregroundColor(.green)
+                                    let display = p == "Unknown" ? manualProvider : p
+                                    Image(systemName: LiveApiManager.providerIcon(display)).foregroundColor(.green)
+                                    Text("Nhận diện: \(display)").font(.caption).foregroundColor(.green)
                                 case .error(let msg):
                                     Image(systemName: "xmark.circle.fill").foregroundColor(.red)
                                     Text(msg).font(.caption).foregroundColor(.red)
@@ -1149,6 +1153,27 @@ private struct AddLiveApiSheet: View {
                                 }
                             }
                             .padding(.horizontal)
+                        }
+
+                        // Manual provider picker — hiện khi không nhận diện được
+                        if case .ready(let p) = status, p == "Unknown" {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Chọn nhà cung cấp")
+                                    .font(.caption).foregroundColor(theme.textSec)
+                                Picker("Provider", selection: $manualProvider) {
+                                    ForEach(knownProviders, id: \.self) { p in Text(p).tag(p) }
+                                }
+                                .pickerStyle(.menu)
+                                .foregroundColor(theme.accent)
+                                .padding(10)
+                                .background(theme.surface)
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            .onChange(of: manualProvider) { p in
+                                voices = localVoices(for: p)
+                                selectedVoice = voices.first ?? ""
+                            }
                         }
 
                         // Voice picker
@@ -1190,7 +1215,8 @@ private struct AddLiveApiSheet: View {
 
                         // Save button
                         if case .ready(let p) = status {
-                            Button { saveEntry(provider: p); dismiss() } label: {
+                            let saveProvider = p == "Unknown" ? manualProvider : p
+                            Button { saveEntry(provider: saveProvider); dismiss() } label: {
                                 HStack {
                                     Spacer()
                                     Image(systemName: "checkmark.circle.fill")
@@ -1216,6 +1242,14 @@ private struct AddLiveApiSheet: View {
                     Button("Huỷ") { dismiss() }.foregroundColor(theme.accent)
                 }
             }
+        }
+    }
+
+    private func localVoices(for provider: String) -> [String] {
+        switch provider {
+        case "Gemini Live":     return LiveVoices.all.map { $0.id }
+        case "OpenAI Realtime": return ["alloy", "echo", "shimmer", "nova", "onyx", "fable", "coral"]
+        default:                return []
         }
     }
 
