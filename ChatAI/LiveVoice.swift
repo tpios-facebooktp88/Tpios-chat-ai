@@ -516,10 +516,12 @@ final class LiveVoiceManager: ObservableObject {
 
     func start(model: String, voice: String, persona: String, bargeIn: Bool) {
         guard state == .idle else { return }
-        let key = (KeychainHelper.read(forKey: AIProviderKind.gemini.keychainKey) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Ưu tiên key riêng Live Voice, fallback về key Gemini chung
+        let key = (KeychainHelper.read(forKey: "live_voice_api_key")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+            ? (KeychainHelper.read(forKey: AIProviderKind.gemini.keychainKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            : (KeychainHelper.read(forKey: "live_voice_api_key") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
-            errorText = "Chưa có Gemini API key. Vào Cài đặt để nhập (lấy miễn phí ở Google AI Studio)."
+            errorText = "Chưa có API key. Vào Cài đặt → Giọng nói & Vai trò để nhập key Live Voice."
             return
         }
         errorText = nil

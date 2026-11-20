@@ -132,6 +132,13 @@ struct SettingsTabView: View {
 
 // MARK: - Giọng nói & Vai trò (kết hợp cài đặt Gemini Live)
 
+// Live Voice API key status
+private enum LiveApiStatus: Equatable {
+    case idle, checking
+    case ok(provider: String, preview: String)
+    case error(String)
+}
+
 struct VoiceRoleSettingsView: View {
     @EnvironmentObject var theme: ThemeManager
     @AppStorage("autoSpeakReplies") var autoSpeak: Bool    = false
@@ -140,6 +147,7 @@ struct VoiceRoleSettingsView: View {
     @AppStorage("live_persona")     var persona: String     = LivePersona.defaultText
     @AppStorage("live_barge_in")      var bargeIn: Bool       = false
     @AppStorage("englishLearningMode") var englishMode: Bool  = false
+    @AppStorage("live_api_provider")  var liveApiProvider: String = "Gemini Live"
 
     // Vai diễn prompts — lưu riêng từng cái
     @AppStorage("persona_lily_1") var lily1: String = LivePersona.lilyDefaults[0]
@@ -152,8 +160,13 @@ struct VoiceRoleSettingsView: View {
 
     @State private var expandedIdx: Int? = nil
     @State private var draftPrompts: [String] = Array(repeating: "", count: 7)
+    @State private var liveApiKey: String = KeychainHelper.read(forKey: "live_voice_api_key") ?? ""
+    @State private var showLiveKey = false
+    @State private var liveApiStatus: LiveApiStatus = .idle
 
     @FocusState private var focusedField: Int?
+
+    private let liveProviders = ["Gemini Live", "OpenAI Realtime", "Claude Voice"]
 
     var body: some View {
         ZStack {
@@ -205,6 +218,102 @@ struct VoiceRoleSettingsView: View {
                         .font(.caption).foregroundColor(theme.textSec)
                         .padding(.horizontal, 20).padding(.bottom, 8)
 
+                    // ── API Live Voice ────────────────────────────────
+                    sectionHeader("API LIVE VOICE")
+                    VStack(spacing: 0) {
+                        // Provider picker
+                        HStack {
+                            Text("Provider").foregroundColor(theme.textPri)
+                            Spacer()
+                            Picker("", selection: $liveApiProvider) {
+                                ForEach(liveProviders, id: \.self) { p in
+                                    Text(p).tag(p)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .foregroundColor(theme.accent)
+                        }
+                        .padding()
+                        Divider().background(theme.divider)
+
+                        // API Key input
+                        HStack(spacing: 10) {
+                            Image(systemName: "key.fill")
+                                .foregroundColor(theme.textSec).frame(width: 20)
+                            Group {
+                                if showLiveKey {
+                                    TextField("Nhập API key...", text: $liveApiKey)
+                                } else {
+                                    SecureField("Nhập API key...", text: $liveApiKey)
+                                }
+                            }
+                            .foregroundColor(theme.textPri)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            Button { showLiveKey.toggle() } label: {
+                                Image(systemName: showLiveKey ? "eye.slash" : "eye")
+                                    .foregroundColor(theme.textSec)
+                            }
+                        }
+                        .padding()
+                        Divider().background(theme.divider)
+
+                        // Status badge
+                        HStack {
+                            switch liveApiStatus {
+                            case .idle:
+                                let stored = KeychainHelper.read(forKey: "live_voice_api_key") ?? ""
+                                if stored.isEmpty {
+                                    Label("Chưa có key riêng — đang dùng key Gemini mặc định",
+                                          systemImage: "info.circle")
+                                        .font(.caption).foregroundColor(theme.textSec)
+                                } else {
+                                    Label("Đã lưu · chưa kiểm tra", systemImage: "clock")
+                                        .font(.caption).foregroundColor(theme.textSec)
+                                }
+                            case .checking:
+                                ProgressView().scaleEffect(0.8)
+                                Text("Đang kiểm tra...").font(.caption).foregroundColor(theme.textSec)
+                            case .ok(let provider, let preview):
+                                Label("Đang dùng: \(provider) · \(preview)",
+                                      systemImage: "checkmark.circle.fill")
+                                    .font(.caption).foregroundColor(.green)
+                            case .error(let msg):
+                                Label(msg, systemImage: "xmark.circle.fill")
+                                    .font(.caption).foregroundColor(.red)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal).padding(.vertical, 10)
+                        Divider().background(theme.divider)
+
+                        // Check & Save button
+                        Button {
+                            Task { await checkAndSaveLiveKey() }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if liveApiStatus == .checking {
+                                    ProgressView().scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                    Text("Kiểm tra & Lưu")
+                                }
+                                Spacer()
+                            }
+                            .padding(12)
+                            .background(theme.accent.opacity(0.15))
+                            .cornerRadius(10)
+                        }
+                        .foregroundColor(theme.accent)
+                        .padding()
+                        .disabled(liveApiStatus == .checking)
+                    }
+                    .background(theme.surface).cornerRadius(14).padding(.horizontal)
+                    Text("Key riêng cho AI Voice. Để trống sẽ dùng key Gemini từ mục API Keys.")
+                        .font(.caption).foregroundColor(theme.textSec)
+                        .padding(.horizontal, 20).padding(.bottom, 8)
+
                     // ── Vai diễn Lily ─────────────────────────────────
                     sectionHeader("VAI DIỄN AI")
                     VStack(spacing: 0) {
@@ -230,6 +339,27 @@ struct VoiceRoleSettingsView: View {
                 Button("Xong") { focusedField = nil }
                     .foregroundColor(theme.accent)
             }
+        }
+    }
+
+    // Kiểm tra & lưu API key Live Voice
+    private func checkAndSaveLiveKey() async {
+        let key = liveApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            liveApiStatus = .error("Key không được để trống")
+            return
+        }
+        liveApiStatus = .checking
+        do {
+            // Hiện chỉ Gemini Live support — các provider khác hiển thị tên và lưu key
+            if liveApiProvider == "Gemini Live" {
+                _ = try await GeminiLiveModels.fetch(apiKey: key)
+            }
+            KeychainHelper.save(key, forKey: "live_voice_api_key")
+            let preview = key.prefix(6) + "..." + key.suffix(4)
+            liveApiStatus = .ok(provider: liveApiProvider, preview: String(preview))
+        } catch {
+            liveApiStatus = .error(error.localizedDescription)
         }
     }
 
