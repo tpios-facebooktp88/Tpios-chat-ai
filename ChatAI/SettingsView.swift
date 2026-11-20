@@ -329,15 +329,13 @@ struct VoiceRoleSettingsView: View {
                                     if apiMgr.activeId == entry.id {
                                         Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                                     }
+                                    Button { apiMgr.remove(entry) } label: {
+                                        Image(systemName: "trash").foregroundColor(.red)
+                                    }
                                 }
                                 .padding()
                                 .contentShape(Rectangle())
                                 .onTapGesture { apiMgr.setActive(entry.id) }
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) { apiMgr.remove(entry) } label: {
-                                        Label("Xóa", systemImage: "trash")
-                                    }
-                                }
                                 if entry.id != apiMgr.entries.last?.id {
                                     Divider().background(theme.divider)
                                 }
